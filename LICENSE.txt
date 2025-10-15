@@ -1,13 +1,22 @@
-MIT License
+PyBEP (c) 2025 University of Ljubljana, Faculty of Mechanical Engineering, Laboratory for Internal Combustion Engines and Electromobility LICeM 
 
-Copyright (c) 2021 Othneil Drew
+PyBEP is licensed under a
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License. You are free to:
+
+- Share: Copy and redistribute the material in any medium, mode, or format.
+- Adapt: Remix, transform, and build upon the material for any non-commercial purpose.
+
+Under the following terms:
+
+- Attribution: You must give appropriate credit, provide a link to the license, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
+- NonCommercial: You may not use the material for commercial purposes.
+- ShareAlike: If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
+
+You can find a full copy of the license at: https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" basis, without warranties or conditions of any kind, either express or implied.
 
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
