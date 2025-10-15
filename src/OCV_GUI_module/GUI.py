@@ -1,12 +1,45 @@
+import os
 import tkinter as tk
-from tkinter import Label, Entry, filedialog, IntVar, Scale, Button, DoubleVar
+from tkinter import Label, Entry, filedialog, IntVar, Scale, Button, DoubleVar, messagebox
 from PIL import Image, ImageTk
-from optimization_functions import perform_full_optimization_parallel_to_json_GUI  # noqa: E501
-from optimization_functions import perform_full_optimization_parallel  # noqa: E501
-from add_curves import add_half_cell_data
-from add_battery import load_soc_ocv_data
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+
+# Smart import handling so this file works when run directly or as a package/module
+def _smart_import():
+    try:
+        # When imported as a package/module
+        from .optimization_functions import perform_full_optimization_parallel_to_json_GUI
+        from .optimization_functions import perform_full_optimization_parallel
+        from .add_curves import add_half_cell_data
+        from .add_battery import load_soc_ocv_data
+        from .data_formatter import format_folder_data
+        return (perform_full_optimization_parallel_to_json_GUI,
+                perform_full_optimization_parallel,
+                add_half_cell_data,
+                load_soc_ocv_data,
+                format_folder_data)
+    except Exception:
+        # Fallback to absolute imports for direct execution
+        from optimization_functions import perform_full_optimization_parallel_to_json_GUI
+        from optimization_functions import perform_full_optimization_parallel
+        from add_curves import add_half_cell_data
+        from add_battery import load_soc_ocv_data
+        from data_formatter import format_folder_data
+        return (perform_full_optimization_parallel_to_json_GUI,
+                perform_full_optimization_parallel,
+                add_half_cell_data,
+                load_soc_ocv_data,
+                format_folder_data)
+
+
+# Obtain functions using smart import
+(perform_full_optimization_parallel_to_json_GUI,
+ perform_full_optimization_parallel,
+ add_half_cell_data,
+ load_soc_ocv_data,
+ format_folder_data) = _smart_import()
 
 class OCVBatteryDecompositionGUI:
     def __init__(self, master):
@@ -56,6 +89,13 @@ class OCVBatteryDecompositionGUI:
             self.left_frame, text="Download Result",
             command=self.download_result, width=int(font_size),
             font=("Arial", int(font_size*0.8)))
+        
+        # Format Data button (uses data_formatter.format_folder_data)
+        self.format_data_button = Button(
+            self.left_frame, text="Format Data",
+            command=self._safe_format_folder_data, width=int(font_size),
+            font=("Arial", int(font_size*0.8)))
+        self.format_data_button.pack(pady=10)
         
         # Result label and plot
         self.result_label = None
@@ -289,72 +329,112 @@ class OCVBatteryDecompositionGUI:
         return empty_plot
 
     def add_logo(self, font_size):
-        # Load the image
-        logo_path = "LICEM/Logo1.png"
-        image = Image.open(logo_path)
+        # Load the image from project LICEM folder if available. Use robust path
+        try:
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "LICEM", "Logo1.png")
+            if not os.path.exists(logo_path):
+                # No logo available, silently skip
+                return
+            image = Image.open(logo_path)
+            resample_filter = Image.Resampling.LANCZOS
+            image = image.resize((font_size * 8, font_size * 8), resample_filter)
 
-        resample_filter = Image.Resampling.LANCZOS  
-        image = image.resize((font_size * 8, font_size * 8), resample_filter)
+            logo_image = ImageTk.PhotoImage(image)
+            self.logo_img = logo_image
 
-        logo_image = ImageTk.PhotoImage(image)
-        self.logo_img = logo_image
+            canvas = tk.Canvas(self.left_frame,
+                               width=font_size * 8,
+                               height=font_size * 8,
+                               bg="#2C2F33",
+                               highlightthickness=0)
+            # Pack the canvas to the bottom right of the left_frame
+            canvas.pack(side=tk.BOTTOM, anchor=tk.SE, padx=0, pady=0)
 
-        canvas = tk.Canvas(self.left_frame,
-                           width=font_size * 8,
-                           height=font_size * 8,
-                           bg="#2C2F33",
-                           highlightthickness=0)
-        # Pack the canvas to the bottom right of the left_frame
-        canvas.pack(side=tk.BOTTOM, anchor=tk.SE, padx=0, pady=0) 
-
-        # Place the image at the bottom-right of the canvas using anchor
-        canvas.create_image(font_size * 8, font_size * 8,
-                             anchor=tk.SE,
-                             image=self.logo_img)
+            # Place the image at the bottom-right of the canvas using anchor
+            canvas.create_image(font_size * 8, font_size * 8,
+                                 anchor=tk.SE,
+                                 image=self.logo_img)
+        except Exception:
+            # If anything goes wrong while loading/resizing the image, skip logo
+            return
         
     def add_initial_logo(self, font_size):
-        logo_path = "LICEM/Logo3.png"
-        image = Image.open(logo_path)
+        # Try to load a larger logo for initial display, but fail gracefully
+        try:
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "LICEM", "Logo3.png")
+            if not os.path.exists(logo_path):
+                return
+            image = Image.open(logo_path)
 
-        # Maintain aspect ratio
-        original_width, original_height = image.size
-        aspect_ratio = original_width / original_height
+            # Maintain aspect ratio
+            original_width, original_height = image.size
+            aspect_ratio = original_width / original_height
 
-        # Get current screen dimensions from the master window
-        screen_width = self.master.winfo_screenwidth()
-        screen_height = self.master.winfo_screenheight()
+            # Get current screen dimensions from the master window
+            screen_width = self.master.winfo_screenwidth()
+            screen_height = self.master.winfo_screenheight()
 
-        target_max_height = screen_height * 0.8
-        target_max_width = (screen_width / 2) * 0.9
+            target_max_height = screen_height * 0.8
+            target_max_width = (screen_width / 2) * 0.9
 
-        if (target_max_width / aspect_ratio) <= target_max_height:
-            # Scale based on width
-            new_width = int(target_max_width)
-            new_height = int(target_max_width / aspect_ratio)
-        else:
-            # Scale based on height
-            new_height = int(target_max_height)
-            new_width = int(target_max_height * aspect_ratio)
+            if (target_max_width / aspect_ratio) <= target_max_height:
+                # Scale based on width
+                new_width = int(target_max_width)
+                new_height = int(target_max_width / aspect_ratio)
+            else:
+                # Scale based on height
+                new_height = int(target_max_height)
+                new_width = int(target_max_height * aspect_ratio)
 
-        # Enforce a minimum size
-        min_logo_size = font_size * 10
-        if new_width < min_logo_size and new_height < min_logo_size:
-            new_width = min_logo_size
-            new_height = int(min_logo_size / aspect_ratio)
+            # Enforce a minimum size
+            min_logo_size = font_size * 10
+            if new_width < min_logo_size and new_height < min_logo_size:
+                new_width = min_logo_size
+                new_height = int(min_logo_size / aspect_ratio)
 
+            # Resize with high-quality filter
+            resample_filter = Image.Resampling.LANCZOS
+            image = image.resize((new_width, new_height), resample_filter)
 
-        resample_filter = Image.Resampling.LANCZOS
-        image = image.resize((new_width, new_height), resample_filter)
+            logo_image = ImageTk.PhotoImage(image)
+            self.initial_logo_img = logo_image  # prevent garbage collection
 
-        logo_image = ImageTk.PhotoImage(image)
-        self.initial_logo_img = logo_image
+            self.logo_label = tk.Label(self.right_frame, image=logo_image, bg="white")
+            self.logo_label.place(relx=0.5, rely=0.5, anchor='center')
+        except Exception:
+            return
 
-        self.logo_label = tk.Label(self.right_frame, image=logo_image, bg="white")
-        self.logo_label.place(relx=0.5, rely=0.5, anchor='center') 
+    def _safe_format_folder_data(self):
+        """
+        Call the shared format_folder_data function and show result to user.
+        This wrapper ensures GUI-friendly error reporting.
+        """
+        try:
+            # format_folder_data is expected to handle its own dialogs; call it
+            format_folder_data()
+        except Exception as e:
+            messagebox.showerror("Format Data Error", f"Failed to format data: {e}")
             
 # Main application loop
+# Ensure a clean shutdown when the window is closed from the results GUI behavior
+def on_closing():
+    """
+    Ensure complete shutdown when the GUI window is closed.
+    Attempts to destroy the Tk window and then force-exit the process.
+    """
+    try:
+        root.destroy()
+    except Exception:
+        pass
+    finally:
+        # Force exit to ensure long-running background threads/processes stop
+        os._exit(0)
+
+
 root = tk.Tk()
 root.resizable(width=True, height=True)
+# Wire the WM_DELETE_WINDOW protocol to ensure process is killed on window close
+root.protocol("WM_DELETE_WINDOW", on_closing)
 gui = OCVBatteryDecompositionGUI(root)
 # Small credit text at bottom-left corner
 credit_label = tk.Label(

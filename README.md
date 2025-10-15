@@ -67,7 +67,7 @@ Once installed, you can easily launch the GUI for PyBEP:
 2. Navigate to the project directory if you haven't already.
 3. Run the following command to launch the GUI:
    ```sh
-   python -m src.OCV_GUI_module.GUI_from_terminal
+   python -m src.OCV_GUI_module.GUI
    ```
    This command will open the GUI interface, allowing you to perform battery OCV decomposition effortlessly.
 
@@ -180,6 +180,14 @@ If you prefer not to use the GUI, you can directly use the `perform_full_optimiz
 This project is currently under active development. As a result, there may be temporary inconsistencies between the graphical user interface (GUI) and the instructions provided in this README.
 
 We appreciate your understanding and encourage you to reach out if you notice any discrepancies or have questions. Your feedback is valuable and helps us improve the project.
+
+## Updates
+
+New in this release:
+
+- Format Data: The GUI now includes a "Format Data" button in the left pane that attempts to reformat and standardize raw `.txt` data files into the project's expected 1001-point format. This is intended to help users quickly prepare datasets for optimization without manual preprocessing.
+
+   Important warning: The automatic formatter is a convenience tool and is not bulletproof. It may fail or produce imperfect results for files with unusual layouts, noisy measurements, inconsistent delimiters, or embedded comments. We do NOT guarantee it will always produce correct or usable results. You should always review the output before running optimizations, and manually format your data when possible.
 
 <!-- CONTRIBUTING -->
 ## Contributing
