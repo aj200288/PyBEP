@@ -6,8 +6,12 @@ from scipy.interpolate import interp1d
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.signal import savgol_filter
 from scipy.optimize import minimize
-from tkinter import (filedialog, messagebox, Toplevel, Button, Label, Frame,
-                      StringVar, Radiobutton)
+# tkinter is imported lazily inside the specific GUI-dialog functions below
+# (show_column_selection_dialog, show_curve_type_dialog, format_folder_data)
+# rather than at module level, so this module — including the headless,
+# UI-agnostic parsing/validation pipeline (read_raw_table, load_ocv_curve,
+# etc.) — stays importable on servers without tkinter installed (e.g. the
+# PyBEP_spletna web app).
 
 
 MIN_DATA_ROWS = 4
@@ -193,6 +197,8 @@ def show_column_selection_dialog(df, file_label):
     which column is SOC and which is OCV (also used to pick 2 out of more
     than 2 columns). Returns (soc_idx, ocv_idx), or None if cancelled.
     """
+    from tkinter import Toplevel, Button, Label, Frame, StringVar, Radiobutton
+
     n_cols = df.shape[1]
     guess_soc, guess_ocv = _heuristic_column_roles(df)
 
@@ -662,6 +668,8 @@ def show_curve_type_dialog():
     Returns:
     - str: 'cathode', 'anode', 'battery', 'mixed', or None if cancelled
     """
+    from tkinter import Toplevel, Button, Label, Frame
+
     result = [None]  # Use list to allow modification in nested function
 
     def on_selection(choice):
@@ -724,6 +732,8 @@ def format_folder_data():
     folder. Opens file dialog, processes all files, creates _FORMATTED
     folder and files.
     """
+    from tkinter import filedialog, messagebox
+
     # Open folder selection dialog
     folder_path = filedialog.askdirectory(
         title="Select folder containing data files to format"
