@@ -10,24 +10,24 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 def _smart_import():
     try:
         # When imported as a package/module
-        from .optimization_functions import perform_full_optimization_parallel_to_json_GUI
+        from .optimization_functions import save_optimization_result_to_json
         from .optimization_functions import perform_full_optimization_parallel
         from .add_curves import add_half_cell_data
         from .add_battery import load_soc_ocv_data
         from .data_formatter import format_folder_data
-        return (perform_full_optimization_parallel_to_json_GUI,
+        return (save_optimization_result_to_json,
                 perform_full_optimization_parallel,
                 add_half_cell_data,
                 load_soc_ocv_data,
                 format_folder_data)
     except Exception:
         # Fallback to absolute imports for direct execution
-        from optimization_functions import perform_full_optimization_parallel_to_json_GUI
+        from optimization_functions import save_optimization_result_to_json
         from optimization_functions import perform_full_optimization_parallel
         from add_curves import add_half_cell_data
         from add_battery import load_soc_ocv_data
         from data_formatter import format_folder_data
-        return (perform_full_optimization_parallel_to_json_GUI,
+        return (save_optimization_result_to_json,
                 perform_full_optimization_parallel,
                 add_half_cell_data,
                 load_soc_ocv_data,
@@ -35,7 +35,7 @@ def _smart_import():
 
 
 # Obtain functions using smart import
-(perform_full_optimization_parallel_to_json_GUI,
+(save_optimization_result_to_json,
  perform_full_optimization_parallel,
  add_half_cell_data,
  load_soc_ocv_data,
@@ -65,6 +65,7 @@ class OCVBatteryDecompositionGUI:
         self.interpolated_anodes = None
         self.SOC_battery = None
         self.OCV_battery = None
+        self.last_result = None
         
         # Create left and right frames for the GUI
         self.left_frame = tk.Frame(master, width=screen_width, bg="#2C2F33")
@@ -247,6 +248,7 @@ class OCVBatteryDecompositionGUI:
 
         # Plot results and display optimization results
         if result['calculated_battery_OCV_opt'] is not None:
+            self.last_result = result
             self.plot_results(result)
             data_label_text = (
                 f"Best Cathode Data ID: {result['Best Cathode Data ID']}\n"
@@ -268,37 +270,31 @@ class OCVBatteryDecompositionGUI:
             self.download_button.pack(pady=10)
 
     def download_result(self):
-        # Download the optimization result as a JSON file
+        # Download the optimization result (already computed by
+        # run_optimization) as a JSON file, without re-running the
+        # optimization search again.
+        if self.last_result is None:
+            return
+
         result_filename = filedialog.asksaveasfilename(
             defaultextension=".json",
             filetypes=[("JSON files", "*.json")]
         )
         if result_filename:
-            perform_full_optimization_parallel_to_json_GUI(
-                result_filename, self.SOC_battery, self.OCV_battery,
-                self.interpolated_cathodes, self.interpolated_anodes,
-                iterations=self.iterations_var.get(),
-                battery=self.battery_var.get(),
-                derivative_inverse=self.derivative_var.get()
-            )
+            save_optimization_result_to_json(self.last_result, result_filename)
             print("Result downloaded successfully.")
-        
+
         # Hide the download button after downloading
         self.download_button.pack_forget()
 
     def plot_results(self, result):
         # Plot the optimization results
-        if self.plot is None:
-            self.plot = FigureCanvasTkAgg(
-                plt.figure(figsize=(8, 6)), master=self.right_frame)
-            self.plot.get_tk_widget().pack(
-                side=tk.TOP, fill=tk.BOTH, expand=True)
-        else:
+        if self.plot is not None:
             self.plot.get_tk_widget().destroy()
-            self.plot = FigureCanvasTkAgg(
-                plt.figure(figsize=(8, 6)), master=self.right_frame)
-            self.plot.get_tk_widget().pack(
-                side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.plot = FigureCanvasTkAgg(
+            plt.figure(figsize=(8, 6)), master=self.right_frame)
+        self.plot.get_tk_widget().pack(
+            side=tk.TOP, fill=tk.BOTH, expand=True)
 
         # Plot the measured and optimized battery OCV, cathode OCP, and anode OCP
         plt.plot(

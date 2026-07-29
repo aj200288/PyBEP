@@ -1,4 +1,9 @@
-import numpy as np
+try:
+    # When imported as a package/module
+    from .data_formatter import parse_txt_file
+except ImportError:
+    # Fallback to absolute import for direct execution
+    from data_formatter import parse_txt_file
 
 
 def load_soc_ocv_data(txt_file):
@@ -11,16 +16,5 @@ def load_soc_ocv_data(txt_file):
     Returns:
     - numpy.ndarray, numpy.ndarray: SOC_battery and OCV_battery arrays.
     """
-    # Load data from the txt file
-    with open(txt_file, 'r') as file:
-        lines = file.readlines()
-
-    # Extract x and y values from the file
-    data_pairs = [map(float, line.strip().split()) for line in lines]
-    SOC_battery, OCV_battery = zip(*data_pairs)
-
-    # Convert to NumPy arrays
-    SOC_battery = np.array(SOC_battery)
-    OCV_battery = np.array(OCV_battery)
-
+    SOC_battery, OCV_battery = parse_txt_file(txt_file)
     return SOC_battery, OCV_battery

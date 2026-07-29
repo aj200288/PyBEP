@@ -1,6 +1,12 @@
 import os
 from scipy.interpolate import interp1d
-import numpy as np
+
+try:
+    # When imported as a package/module
+    from .data_formatter import parse_txt_file
+except ImportError:
+    # Fallback to absolute import for direct execution
+    from data_formatter import parse_txt_file
 
 
 def add_half_cell_data(directory_name):
@@ -32,17 +38,12 @@ def add_half_cell_data(directory_name):
     for txt_file in txt_files:
         file_path = os.path.join(directory_path, txt_file)
 
-        # Load data from the txt file
-        with open(file_path, 'r') as file:
-            lines = file.readlines()
+        # Load x and y values from the file
+        x_values, y_values = parse_txt_file(file_path)
 
-        # Extract x and y values from the file
-        x_y_pairs = [map(float, line.strip().split()) for line in lines]
-        x_values, y_values = zip(*x_y_pairs)
-
-        # Check if x values are in increasing order
+        # Check if x values are in decreasing order
         if all(x > y for x, y in zip(x_values, x_values[1:])):
-            # If increasing, reverse the x, y values
+            # If decreasing, reverse the x, y values
             x_values = x_values[::-1]
             y_values = y_values[::-1]
 
@@ -54,7 +55,7 @@ def add_half_cell_data(directory_name):
         # Create a new dataset
         new_dataset = {
             'ID_number': os.path.splitext(txt_file)[0],
-            'x_values': np.array(x_values),
+            'x_values': x_values,
             'interpolated_function': interpolated_function
         }
 
