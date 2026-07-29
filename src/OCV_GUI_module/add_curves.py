@@ -3,21 +3,26 @@ from scipy.interpolate import interp1d
 
 try:
     # When imported as a package/module
-    from .data_formatter import parse_txt_file
+    from .data_formatter import load_ocv_curve
 except ImportError:
     # Fallback to absolute import for direct execution
-    from data_formatter import parse_txt_file
+    from data_formatter import load_ocv_curve
 
 
-def add_half_cell_data(directory_name):
+def add_half_cell_data(directory_name, curve_type):
     """
-    Add half-cell data from text files in the specified path to a dictionary.
+    Add half-cell data from data files in the specified path to a dictionary.
 
     Parameters:
-    - directory_name (str): The directory name containing text files with data.
+    - directory_name (str): The directory name containing data files
+      (.txt/.csv/.xlsx) with SOC/OCV data.
+    - curve_type (str): 'cathode' or 'anode' — controls orientation
+      convention (see data_formatter.check_and_correct_orientation).
 
     Raises:
     - ValueError: If the specified directory does not exist.
+    - DataFormatError: If a file in the directory cannot be parsed, or the
+      user cancels the column-selection dialog.
 
     Returns:
     - dict: A dictionary containing half-cell data.
@@ -31,21 +36,23 @@ def add_half_cell_data(directory_name):
     # Create a dictionary to store the half-cell data
     half_cell_dictionary = {}
 
-    # Get a list of all txt files in the specified directory
-    txt_files = [f for f in os.listdir(directory_path) if f.endswith('.txt')]
+    # Get a list of all supported data files in the specified directory
+    data_files = [f for f in os.listdir(directory_path)
+                  if f.lower().endswith(('.txt', '.csv', '.xlsx'))]
 
-    # Iterate through each txt file
-    for txt_file in txt_files:
-        file_path = os.path.join(directory_path, txt_file)
+    # Column mapping is confirmed once (on the first file) and reused for
+    # the rest of the folder, since a folder is typically one consistent
+    # export format.
+    column_choice = None
 
-        # Load x and y values from the file
-        x_values, y_values = parse_txt_file(file_path)
+    # Iterate through each data file
+    for data_file in data_files:
+        file_path = os.path.join(directory_path, data_file)
 
-        # Check if x values are in decreasing order
-        if all(x > y for x, y in zip(x_values, x_values[1:])):
-            # If decreasing, reverse the x, y values
-            x_values = x_values[::-1]
-            y_values = y_values[::-1]
+        x_values, y_values, _warnings, used_columns = load_ocv_curve(
+            file_path, curve_type, column_choice=column_choice)
+        if column_choice is None:
+            column_choice = used_columns
 
         # Interpolate the OCP function
         interpolated_function = interp1d(
@@ -54,7 +61,7 @@ def add_half_cell_data(directory_name):
 
         # Create a new dataset
         new_dataset = {
-            'ID_number': os.path.splitext(txt_file)[0],
+            'ID_number': os.path.splitext(data_file)[0],
             'x_values': x_values,
             'interpolated_function': interpolated_function
         }

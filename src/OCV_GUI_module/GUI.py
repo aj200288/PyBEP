@@ -14,24 +14,26 @@ def _smart_import():
         from .optimization_functions import perform_full_optimization_parallel
         from .add_curves import add_half_cell_data
         from .add_battery import load_soc_ocv_data
-        from .data_formatter import format_folder_data
+        from .data_formatter import format_folder_data, DataFormatError
         return (save_optimization_result_to_json,
                 perform_full_optimization_parallel,
                 add_half_cell_data,
                 load_soc_ocv_data,
-                format_folder_data)
+                format_folder_data,
+                DataFormatError)
     except Exception:
         # Fallback to absolute imports for direct execution
         from optimization_functions import save_optimization_result_to_json
         from optimization_functions import perform_full_optimization_parallel
         from add_curves import add_half_cell_data
         from add_battery import load_soc_ocv_data
-        from data_formatter import format_folder_data
+        from data_formatter import format_folder_data, DataFormatError
         return (save_optimization_result_to_json,
                 perform_full_optimization_parallel,
                 add_half_cell_data,
                 load_soc_ocv_data,
-                format_folder_data)
+                format_folder_data,
+                DataFormatError)
 
 
 # Obtain functions using smart import
@@ -39,7 +41,8 @@ def _smart_import():
  perform_full_optimization_parallel,
  add_half_cell_data,
  load_soc_ocv_data,
- format_folder_data) = _smart_import()
+ format_folder_data,
+ DataFormatError) = _smart_import()
 
 class OCVBatteryDecompositionGUI:
     def __init__(self, master):
@@ -234,9 +237,16 @@ class OCVBatteryDecompositionGUI:
             return
         
         # Load and interpolate cathode and anode data
-        self.interpolated_cathodes = add_half_cell_data(self.cathode_loc)
-        self.interpolated_anodes = add_half_cell_data(self.anode_loc)
-        self.SOC_battery, self.OCV_battery = load_soc_ocv_data(self.battery_loc)  # noqa: E501
+        try:
+            self.interpolated_cathodes = add_half_cell_data(self.cathode_loc, curve_type='cathode')
+            self.interpolated_anodes = add_half_cell_data(self.anode_loc, curve_type='anode')
+            self.SOC_battery, self.OCV_battery = load_soc_ocv_data(self.battery_loc)  # noqa: E501
+        except DataFormatError as e:
+            messagebox.showerror("Invalid Data File", str(e))
+            return
+        except ValueError as e:
+            messagebox.showerror("Data Loading Error", str(e))
+            return
         
         # Perform optimization
         result = perform_full_optimization_parallel(
