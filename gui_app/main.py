@@ -1,3 +1,11 @@
+"""
+PyBEP desktop app (Tkinter). Run it with::
+
+    python -m gui_app
+
+All calculation and file parsing comes from ``core``; this module only
+builds the window and wires the buttons up.
+"""
 import os
 import tkinter as tk
 from tkinter import Label, Entry, filedialog, IntVar, Scale, Button, DoubleVar, messagebox
@@ -5,44 +13,16 @@ from PIL import Image, ImageTk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+from core import (save_optimization_result_to_json,
+                  perform_full_optimization_parallel,
+                  add_half_cell_data,
+                  load_soc_ocv_data,
+                  DataFormatError)
+from .dialogs import format_folder_data, show_column_selection_dialog
 
-# Smart import handling so this file works when run directly or as a package/module
-def _smart_import():
-    try:
-        # When imported as a package/module
-        from .optimization_functions import save_optimization_result_to_json
-        from .optimization_functions import perform_full_optimization_parallel
-        from .add_curves import add_half_cell_data
-        from .add_battery import load_soc_ocv_data
-        from .data_formatter import format_folder_data, DataFormatError
-        return (save_optimization_result_to_json,
-                perform_full_optimization_parallel,
-                add_half_cell_data,
-                load_soc_ocv_data,
-                format_folder_data,
-                DataFormatError)
-    except Exception:
-        # Fallback to absolute imports for direct execution
-        from optimization_functions import save_optimization_result_to_json
-        from optimization_functions import perform_full_optimization_parallel
-        from add_curves import add_half_cell_data
-        from add_battery import load_soc_ocv_data
-        from data_formatter import format_folder_data, DataFormatError
-        return (save_optimization_result_to_json,
-                perform_full_optimization_parallel,
-                add_half_cell_data,
-                load_soc_ocv_data,
-                format_folder_data,
-                DataFormatError)
+# Repo root, used to find the LICEM logo images (gui_app/main.py -> repo root)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
-# Obtain functions using smart import
-(save_optimization_result_to_json,
- perform_full_optimization_parallel,
- add_half_cell_data,
- load_soc_ocv_data,
- format_folder_data,
- DataFormatError) = _smart_import()
 
 class OCVBatteryDecompositionGUI:
     def __init__(self, master):
@@ -236,11 +216,18 @@ class OCVBatteryDecompositionGUI:
             print("Please select all folder locations.")
             return
         
-        # Load and interpolate cathode and anode data
+        # Load and interpolate cathode and anode data. The dialog is passed
+        # in as the column resolver so core stays UI-free; it is shown at
+        # most once per folder.
         try:
-            self.interpolated_cathodes = add_half_cell_data(self.cathode_loc, curve_type='cathode')
-            self.interpolated_anodes = add_half_cell_data(self.anode_loc, curve_type='anode')
-            self.SOC_battery, self.OCV_battery = load_soc_ocv_data(self.battery_loc)  # noqa: E501
+            self.interpolated_cathodes = add_half_cell_data(
+                self.cathode_loc, curve_type='cathode',
+                column_resolver=show_column_selection_dialog)
+            self.interpolated_anodes = add_half_cell_data(
+                self.anode_loc, curve_type='anode',
+                column_resolver=show_column_selection_dialog)
+            self.SOC_battery, self.OCV_battery = load_soc_ocv_data(
+                self.battery_loc, column_resolver=show_column_selection_dialog)
         except DataFormatError as e:
             messagebox.showerror("Invalid Data File", str(e))
             return
@@ -337,7 +324,7 @@ class OCVBatteryDecompositionGUI:
     def add_logo(self, font_size):
         # Load the image from project LICEM folder if available. Use robust path
         try:
-            logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "LICEM", "Logo1.png")
+            logo_path = os.path.join(PROJECT_ROOT, "LICEM", "Logo1.png")
             if not os.path.exists(logo_path):
                 # No logo available, silently skip
                 return
@@ -367,7 +354,7 @@ class OCVBatteryDecompositionGUI:
     def add_initial_logo(self, font_size):
         # Try to load a larger logo for initial display, but fail gracefully
         try:
-            logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "LICEM", "Logo3.png")
+            logo_path = os.path.join(PROJECT_ROOT, "LICEM", "Logo3.png")
             if not os.path.exists(logo_path):
                 return
             image = Image.open(logo_path)
@@ -420,35 +407,45 @@ class OCVBatteryDecompositionGUI:
             format_folder_data()
         except Exception as e:
             messagebox.showerror("Format Data Error", f"Failed to format data: {e}")
-            
-# Main application loop
-# Ensure a clean shutdown when the window is closed from the results GUI behavior
-def on_closing():
-    """
-    Ensure complete shutdown when the GUI window is closed.
-    Attempts to destroy the Tk window and then force-exit the process.
-    """
-    try:
-        root.destroy()
-    except Exception:
-        pass
-    finally:
-        # Force exit to ensure long-running background threads/processes stop
-        os._exit(0)
 
 
-root = tk.Tk()
-root.resizable(width=True, height=True)
-# Wire the WM_DELETE_WINDOW protocol to ensure process is killed on window close
-root.protocol("WM_DELETE_WINDOW", on_closing)
-gui = OCVBatteryDecompositionGUI(root)
-# Small credit text at bottom-left corner
-credit_label = tk.Label(
-    root,
-    text="Developed by LICeM",
-    font=("Arial", 11),
-    bg="#2C2F33",
-    fg="white"
-)
-credit_label.place(x=5, rely=1.0, anchor='sw')
-root.mainloop()
+def main():
+    """
+    Build the window and run the app. This used to happen at import time,
+    which meant merely importing this module opened a window — so nothing
+    else (the web app, the tests) could import from it.
+    """
+    root = tk.Tk()
+    root.resizable(width=True, height=True)
+
+    def on_closing():
+        """
+        Ensure complete shutdown when the GUI window is closed.
+        Attempts to destroy the Tk window and then force-exit the process.
+        """
+        try:
+            root.destroy()
+        except Exception:
+            pass
+        finally:
+            # Force exit to ensure long-running background processes stop
+            os._exit(0)
+
+    # Wire WM_DELETE_WINDOW so the process is killed on window close
+    root.protocol("WM_DELETE_WINDOW", on_closing)
+    OCVBatteryDecompositionGUI(root)
+
+    # Small credit text at bottom-left corner
+    credit_label = tk.Label(
+        root,
+        text="Developed by LICeM",
+        font=("Arial", 11),
+        bg="#2C2F33",
+        fg="white"
+    )
+    credit_label.place(x=5, rely=1.0, anchor='sw')
+    root.mainloop()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="card">
+  <h1>PyBEP</h1>
+  <p>Upload your cathode/anode candidate curves and battery OCV data, then configure the optimization.</p>
+
+  {% with messages = get_flashed_messages(category_filter=["error"]) %}
+    {% if messages %}
+    <div class="banner banner-error">
+      <ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  <form class="fields" method="POST" action="{{ url_for('main.upload') }}" enctype="multipart/form-data">
+    <div class="file-group">
+      <label for="cathode_files">Cathode candidate files</label>
+      <input id="cathode_files" class="input-file" type="file" name="cathode_files" multiple required
+             accept=".txt,.csv,.xlsx"/>
+      <span class="file-hint">Select all candidate cathode OCP files at once (.txt / .csv / .xlsx), up to {{ max_files }}.</span>
+    </div>
+    <div class="file-group">
+      <label for="anode_files">Anode candidate files</label>
+      <input id="anode_files" class="input-file" type="file" name="anode_files" multiple required
+             accept=".txt,.csv,.xlsx"/>
+      <span class="file-hint">Select all candidate anode OCP files at once (.txt / .csv / .xlsx), up to {{ max_files }}.</span>
+    </div>
+    <div class="file-group">
+      <label for="battery_file">Battery OCV file</label>
+      <input id="battery_file" class="input-file" type="file" name="battery_file" required
+             accept=".txt,.csv,.xlsx"/>
+    </div>
+
+    <div class="slider-group">
+      <label for="slider-iterations">Iterations (1&ndash;{{ max_iterations }})</label>
+      <input id="slider-iterations" type="range" min="1" max="{{ max_iterations }}" step="1" value="1" name="iterations"
+        oninput="document.getElementById('iterationsValue').textContent=this.value"/>
+      <div class="slider-value">Value: <span id="iterationsValue">1</span></div>
+      <span class="file-hint">More iterations give more consistent results but take longer.</span>
+    </div>
+
+    <div class="slider-group">
+      <label for="slider-a">Battery weight (0&ndash;1, step 0.05)</label>
+      <input id="slider-a" type="range" min="0" max="1" step="0.05" value="1" name="slider_a"
+        oninput="updateSliders('a')"/>
+      <div class="slider-value">Value: <span id="aValue">1.00</span></div>
+    </div>
+
+    <div class="slider-group">
+      <label for="slider-b">Differential capacity weight (0&ndash;1, step 0.05)</label>
+      <input id="slider-b" type="range" min="0" max="1" step="0.05" value="0"
+        oninput="updateSliders('b')"/>
+      <div class="slider-value">Value: <span id="bValue">0.00</span></div>
+      <span class="file-hint">The two weights always add up to 1 &mdash; moving one moves the other.</span>
+    </div>
+
+    <div class="actions">
+      <button class="primary" type="submit">Continue</button>
+      <button class="secondary" type="reset" onclick="setTimeout(syncSliderLabels, 0)">Reset</button>
+    </div>
+  </form>
+</main>
+
+<script>
+  const sliderA = document.getElementById('slider-a');
+  const sliderB = document.getElementById('slider-b');
+  const aValue = document.getElementById('aValue');
+  const bValue = document.getElementById('bValue');
+
+  // Only slider A is submitted; the server derives the differential
+  // capacity weight as 1 - A, so the two can never disagree.
+  function updateSliders(changed) {
+    if (changed === 'a') {
+      sliderB.value = (1 - parseFloat(sliderA.value)).toFixed(2);
+    } else {
+      sliderA.value = (1 - parseFloat(sliderB.value)).toFixed(2);
+    }
+    syncSliderLabels();
+  }
+
+  function syncSliderLabels() {
+    aValue.textContent = parseFloat(sliderA.value).toFixed(2);
+    bValue.textContent = parseFloat(sliderB.value).toFixed(2);
+    document.getElementById('iterationsValue').textContent =
+      document.getElementById('slider-iterations').value;
+  }
+
+  syncSliderLabels();
+</script>
+{% endblock %}

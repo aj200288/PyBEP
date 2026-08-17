@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="card">
+  <h1>Format data</h1>
+  <p>
+    Convert raw measurement files into PyBEP's standard 1001-point layout.
+    Upload your files, choose what kind of curves they are, and download the
+    formatted set as a zip.
+  </p>
+
+  {% with messages = get_flashed_messages(category_filter=["error"]) %}
+    {% if messages %}
+    <div class="banner banner-error">
+      <ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="banner banner-warning">
+    The formatter is a convenience tool, not a guarantee. Unusual layouts, noisy
+    measurements or inconsistent delimiters can produce imperfect results &mdash;
+    always review the output before running an optimization on it.
+  </div>
+
+  <form class="fields" method="POST" action="{{ url_for('main.format_run') }}" enctype="multipart/form-data">
+    <div class="file-group">
+      <label for="data_files">Data files</label>
+      <input id="data_files" class="input-file" type="file" name="data_files" multiple required
+             accept=".txt,.csv,.xlsx"/>
+      <span class="file-hint">
+        Up to {{ max_files }} files (.txt / .csv / .xlsx). All of them must be the same
+        curve type &mdash; format cathode, anode and battery files in separate batches.
+      </span>
+    </div>
+
+    <div class="file-group">
+      <label for="curve_type">Curve type</label>
+      <select class="select-control" id="curve_type" name="curve_type" required>
+        <option value="cathode">Cathode OCP</option>
+        <option value="anode">Anode OCP</option>
+        <option value="battery">Battery OCV</option>
+      </select>
+      <span class="file-hint">Controls the orientation convention applied to the curves.</span>
+    </div>
+
+    <div class="actions">
+      <button class="primary" type="submit">Format files</button>
+      <button class="secondary" type="reset">Reset</button>
+    </div>
+  </form>
+</main>
+{% endblock %}

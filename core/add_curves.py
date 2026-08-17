@@ -1,15 +1,24 @@
 import os
 from scipy.interpolate import interp1d
 
-try:
-    # When imported as a package/module
-    from .data_formatter import load_ocv_curve
-except ImportError:
-    # Fallback to absolute import for direct execution
-    from data_formatter import load_ocv_curve
+from .data_formatter import load_ocv_curve, list_data_files
 
 
-def add_half_cell_data(directory_name, curve_type):
+def build_curve_entry(x_values, y_values):
+    """
+    Build the {'x_values', 'interpolated_function'} entry that
+    optimization_functions.perform_full_optimization_parallel expects for
+    each cathode/anode candidate. Shared by the folder loader below and by
+    the web app, which gets its curves from uploads rather than a folder.
+    """
+    return {
+        'x_values': x_values,
+        'interpolated_function': interp1d(
+            x_values, y_values, kind='cubic', fill_value='extrapolate'),
+    }
+
+
+def add_half_cell_data(directory_name, curve_type, column_resolver=None):
     """
     Add half-cell data from data files in the specified path to a dictionary.
 
@@ -18,6 +27,9 @@ def add_half_cell_data(directory_name, curve_type):
       (.txt/.csv/.xlsx) with SOC/OCV data.
     - curve_type (str): 'cathode' or 'anode' — controls orientation
       convention (see data_formatter.check_and_correct_orientation).
+    - column_resolver: optional UI callback to confirm the SOC/OCV columns
+      (see data_formatter.resolve_soc_ocv_columns). Consulted at most once
+      per folder.
 
     Raises:
     - ValueError: If the specified directory does not exist.
@@ -27,18 +39,17 @@ def add_half_cell_data(directory_name, curve_type):
     Returns:
     - dict: A dictionary containing half-cell data.
     """
-    directory_path = os.path.join(os.getcwd(), directory_name)
+    directory_path = os.path.abspath(directory_name)
 
     # Check if the directory exists
-    if not os.path.exists(directory_path):
+    if not os.path.isdir(directory_path):
         raise ValueError(f"The directory '{directory_path}' does not exist.")
 
     # Create a dictionary to store the half-cell data
     half_cell_dictionary = {}
 
     # Get a list of all supported data files in the specified directory
-    data_files = [f for f in os.listdir(directory_path)
-                  if f.lower().endswith(('.txt', '.csv', '.xlsx'))]
+    data_files = list_data_files(directory_path)
 
     # Column mapping is confirmed once (on the first file) and reused for
     # the rest of the folder, since a folder is typically one consistent
@@ -50,23 +61,15 @@ def add_half_cell_data(directory_name, curve_type):
         file_path = os.path.join(directory_path, data_file)
 
         x_values, y_values, _warnings, used_columns = load_ocv_curve(
-            file_path, curve_type, column_choice=column_choice)
+            file_path, curve_type, column_choice=column_choice,
+            column_resolver=column_resolver)
         if column_choice is None:
             column_choice = used_columns
 
-        # Interpolate the OCP function
-        interpolated_function = interp1d(
-            x_values, y_values, kind='cubic', fill_value='extrapolate'
-        )
-
-        # Create a new dataset
-        new_dataset = {
-            'ID_number': os.path.splitext(data_file)[0],
-            'x_values': x_values,
-            'interpolated_function': interpolated_function
-        }
-
-        # Add the new dataset to the dictionary
-        half_cell_dictionary[new_dataset['ID_number']] = new_dataset
+        # Interpolate the OCP function and store it under the file's name
+        data_id = os.path.splitext(data_file)[0]
+        entry = build_curve_entry(x_values, y_values)
+        entry['ID_number'] = data_id
+        half_cell_dictionary[data_id] = entry
 
     return half_cell_dictionary

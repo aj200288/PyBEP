@@ -241,3 +241,6 @@ $RECYCLE.BIN/
 
 # .nfs files are created when an open file is removed but is still being accessed
 .nfs*
+
+# uv lockfile (no dependencies declared in pyproject.toml; see requirements.txt)
+uv.lock

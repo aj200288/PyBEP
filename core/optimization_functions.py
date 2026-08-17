@@ -169,7 +169,8 @@ def perform_optimization(cathode_number, cathode_info, anode_number,
 def perform_full_optimization_parallel(SOC_battery, OCV_battery,
                                        interpolated_cathodes,
                                        interpolated_anodes, iterations=5,
-                                       battery=1, derivative_inverse=0):
+                                       battery=1, derivative_inverse=0,
+                                       n_jobs=-1):
     """
     Perform parallelized full optimization for multiple iterations
     and find the overall best optimization result.
@@ -187,6 +188,12 @@ def perform_full_optimization_parallel(SOC_battery, OCV_battery,
         Number of iterations for optimization.
     - battery, derivative_inverse: float, optional
         Weighting factors for different components of the objective function.
+    - n_jobs: int, optional
+        Worker processes to spread the (cathode, anode) pairs across.
+        The default -1 uses every core, which is what you want on a desktop.
+        A shared/undersized machine (e.g. a small web host, where the CPU
+        count reported to the process can exceed the cores actually
+        available) should pass a small explicit number instead.
 
     Returns:
     - result: dict
@@ -195,7 +202,7 @@ def perform_full_optimization_parallel(SOC_battery, OCV_battery,
     best_optimization_results = []
 
     for _ in range(iterations):
-        optimization_results = Parallel(n_jobs=-1)(
+        optimization_results = Parallel(n_jobs=n_jobs)(
             delayed(perform_optimization)(cathode_number, cathode_info,
                                           anode_number, anode_info,
                                           OCV_battery, SOC_battery, battery,

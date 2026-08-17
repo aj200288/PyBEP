@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="card" style="width: min(720px, 95vw);">
+  <h1>Confirm columns</h1>
+  <p>Confirm which column is SOC and which is OCV for each file (auto-detected guess is pre-selected).</p>
+
+  {% if errors %}
+  <div class="banner banner-error">
+    <strong>{{ errors|length }} file(s) could not be read and were skipped:</strong>
+    <ul>
+      {% for e in errors %}
+      <li>{{ e.filename }} ({{ e.curve_type }}): {{ e.message }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if previews %}
+  <form method="POST" action="{{ url_for('main.confirm') }}">
+    <div class="confirm-list">
+      {% for p in previews %}
+      <div class="confirm-card">
+        <span class="curve-type-tag">{{ p.curve_type }}</span>
+        <h3>{{ p.filename }}</h3>
+        <table class="preview-table">
+          <thead>
+            <tr>{% for c in range(p.n_cols) %}<th>col {{ c }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            {% for row in p.preview_rows %}
+            <tr>{% for val in row %}<td>{{ "%.4g"|format(val) }}</td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="column-select-row">
+          <div>
+            <label for="soc_{{ p.file_id }}">SOC column</label>
+            <select class="select-control" id="soc_{{ p.file_id }}" name="soc_{{ p.file_id }}">
+              {% for c in range(p.n_cols) %}
+              <option value="{{ c }}" {% if c == p.guess_soc %}selected{% endif %}>col {{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="ocv_{{ p.file_id }}">OCV column</label>
+            <select class="select-control" id="ocv_{{ p.file_id }}" name="ocv_{{ p.file_id }}">
+              {% for c in range(p.n_cols) %}
+              <option value="{{ c }}" {% if c == p.guess_ocv %}selected{% endif %}>col {{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="actions">
+      <button class="primary" type="submit">Run optimization</button>
+      <a class="secondary link-button" href="{{ url_for('main.index') }}">Start over</a>
+    </div>
+    <p class="file-hint" style="margin-top:12px;">
+      The optimization can take a while &mdash; leave this tab open while it runs.
+    </p>
+  </form>
+  {% else %}
+  <p>No files could be read. <a href="{{ url_for('main.index') }}">Go back and try again</a>.</p>
+  {% endif %}
+</main>
+{% endblock %}

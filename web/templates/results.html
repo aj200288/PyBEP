@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="graph-results">
+  {% if warnings %}
+  <div class="banner banner-warning" style="width:100%;max-width:700px;">
+    <strong>Notes on your data:</strong>
+    <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div class="graph">
+    <img src="data:image/png;base64,{{ graph }}" alt="Optimization graph"/>
+  </div>
+
+  <div class="results-card">
+    <div class="results-header">
+      <h2>Results</h2>
+      <form method="GET" action="{{ url_for('main.download') }}">
+        <button class="download-btn" type="submit">Download results JSON</button>
+      </form>
+    </div>
+    <div class="result-item">
+      <span class="label">Best cathode ID:</span>
+      <span class="value">{{ best_cathode }}</span>
+    </div>
+    <div class="result-item">
+      <span class="label">Best anode ID:</span>
+      <span class="value">{{ best_anode }}</span>
+    </div>
+    <div class="result-item">
+      <span class="label">Best parameters:</span>
+      <span class="value">{{ best_parameters }}</span>
+    </div>
+    <div class="result-item">
+      <span class="label">Lowest RMSD:</span>
+      <span class="value">{{ "%.6f"|format(lowest_rmsd) }}</span>
+    </div>
+    <div class="result-item">
+      <span class="label">Settings used:</span>
+      <span class="value">
+        {{ settings.iterations }} iteration(s),
+        battery {{ "%.2f"|format(settings.battery_weight) }} /
+        diff. capacity {{ "%.2f"|format(settings.derivative_weight) }}
+      </span>
+    </div>
+  </div>
+
+  <div class="actions" style="width:100%;max-width:700px;margin-top:20px;">
+    <a class="secondary link-button" href="{{ url_for('main.index') }}">Start a new run</a>
+  </div>
+</div>
+{% endblock %}

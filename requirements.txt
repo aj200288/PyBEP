@@ -1,0 +1,18 @@
+# Shared calculation core (core/)
+numpy
+scipy
+matplotlib
+joblib
+pandas
+openpyxl
+
+# Desktop app (gui_app/) — tkinter itself ships with Python
+pillow
+
+# Website (web/)
+flask
+
+# Production WSGI server for the website. Neither is needed for local
+# development (`python -m web` uses Flask's built-in server).
+gunicorn ; platform_system != "Windows"
+waitress ; platform_system == "Windows"

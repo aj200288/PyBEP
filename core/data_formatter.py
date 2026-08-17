@@ -1,3 +1,13 @@
+"""
+Headless SOC/OCV data ingestion: read a raw .txt/.csv/.xlsx file, work out
+which columns are SOC and OCV, clean the curve, and resample it to 1001
+points.
+
+This module must stay free of any UI toolkit (no tkinter, no flask) so both
+the desktop GUI and the web app can share it. Where a user needs to confirm
+something -- which column is SOC and which is OCV -- the UI layer injects a
+`column_resolver` callback instead (see resolve_soc_ocv_columns).
+"""
 import os
 import csv
 import numpy as np
@@ -6,8 +16,6 @@ from scipy.interpolate import interp1d
 from scipy.integrate import cumulative_trapezoid as cumtrapz
 from scipy.signal import savgol_filter
 from scipy.optimize import minimize
-from tkinter import (filedialog, messagebox, Toplevel, Button, Label, Frame,
-                      StringVar, Radiobutton)
 
 
 MIN_DATA_ROWS = 4
@@ -164,10 +172,14 @@ def read_raw_table(file_path):
     return pd.DataFrame(body, columns=[f"col{i}" for i in range(n_cols)])
 
 
-def _heuristic_column_roles(df):
+def guess_column_roles(df):
     """
     Guess which column is SOC and which is OCV from value ranges: SOC is
     expected to be bounded in roughly [0, 1] or [0, 100], OCV is not.
+
+    Both UI layers use this to pre-select the most likely answer before
+    asking the user to confirm (Tkinter radio buttons in the desktop app,
+    a dropdown in the web app).
     """
     n_cols = df.shape[1]
     scores = []
@@ -187,96 +199,38 @@ def _heuristic_column_roles(df):
     return soc_idx, ocv_idx
 
 
-def show_column_selection_dialog(df, file_label):
+def resolve_soc_ocv_columns(df, file_label, column_choice=None,
+                            column_resolver=None):
     """
-    Show a preview of the parsed columns and let the user confirm/assign
-    which column is SOC and which is OCV (also used to pick 2 out of more
-    than 2 columns). Returns (soc_idx, ocv_idx), or None if cancelled.
-    """
-    n_cols = df.shape[1]
-    guess_soc, guess_ocv = _heuristic_column_roles(df)
+    Determine which dataframe columns are SOC and OCV.
 
-    result = [None]
+    Parameters:
+    - column_choice: an explicit (soc_idx, ocv_idx), applied directly. This
+      is how a caller reuses a confirmation across a whole folder, and how
+      the web app applies what the user picked in the browser form.
+    - column_resolver: optional callable (df, file_label) -> (soc_idx,
+      ocv_idx) or None, consulted only when column_choice is None. This is
+      the seam a UI layer plugs into: the desktop app passes its Tkinter
+      dialog (gui_app.dialogs.show_column_selection_dialog). Returning None
+      means the user cancelled.
 
-    dialog = Toplevel()
-    dialog.title("Confirm SOC / OCV Columns")
-    dialog.geometry("600x360")
-    dialog.minsize(500, 320)
-    dialog.resizable(True, True)
-    dialog.configure(bg="#2C2F33")
-    dialog.transient()
-    dialog.grab_set()
-
-    Label(dialog, text=f"Confirm data columns for:\n{file_label}",
-          font=("Arial", 11, "bold"), bg="#2C2F33", fg="white",
-          justify="left").pack(pady=(15, 5))
-
-    preview_frame = Frame(dialog, bg="#2C2F33")
-    preview_frame.pack(pady=5, padx=15, fill="both", expand=True)
-
-    header_row = Frame(preview_frame, bg="#2C2F33")
-    header_row.pack(fill="x")
-    Label(header_row, text="", width=6, bg="#2C2F33").pack(side="left")
-    for i in range(n_cols):
-        preview_vals = ", ".join(f"{v:.4g}" for v in df.iloc[:5, i])
-        Label(header_row, text=f"col {i}\n{preview_vals}", font=("Arial", 8),
-              bg="#2C2F33", fg="white", width=18, justify="left",
-              wraplength=140).pack(side="left", padx=2)
-
-    soc_var = StringVar(value=str(guess_soc))
-    ocv_var = StringVar(value=str(guess_ocv))
-
-    def make_role_row(label_text, var):
-        row = Frame(preview_frame, bg="#2C2F33")
-        row.pack(fill="x", pady=2)
-        Label(row, text=label_text, width=6, bg="#2C2F33", fg="white").pack(side="left")
-        for i in range(n_cols):
-            Radiobutton(row, variable=var, value=str(i), bg="#2C2F33",
-                        activebackground="#2C2F33", selectcolor="#2C2F33",
-                        width=18).pack(side="left", padx=2)
-
-    make_role_row("SOC", soc_var)
-    make_role_row("OCV", ocv_var)
-
-    status_label = Label(dialog, text="", font=("Arial", 9), bg="#2C2F33", fg="#FF6B6B")
-    status_label.pack(pady=(5, 0))
-
-    def on_confirm():
-        soc_i, ocv_i = int(soc_var.get()), int(ocv_var.get())
-        if soc_i == ocv_i:
-            status_label.config(text="SOC and OCV must be different columns.")
-            return
-        result[0] = (soc_i, ocv_i)
-        dialog.destroy()
-
-    def on_cancel():
-        result[0] = None
-        dialog.destroy()
-
-    button_frame = Frame(dialog, bg="#2C2F33")
-    button_frame.pack(pady=15)
-    Button(button_frame, text="Confirm", command=on_confirm, width=12).pack(side="left", padx=5)
-    Button(button_frame, text="Cancel", command=on_cancel, width=12).pack(side="left", padx=5)
-
-    dialog.wait_window()
-    return result[0]
-
-
-def resolve_soc_ocv_columns(df, file_label, column_choice=None):
-    """
-    Determine which dataframe columns are SOC and OCV. If column_choice
-    (soc_idx, ocv_idx) is given, it's applied directly without a dialog —
-    used to reuse a folder-level confirmation across files. Otherwise the
-    confirmation dialog is always shown.
+    With neither given (e.g. a plain script importing this package), the
+    columns are auto-detected via guess_column_roles and reported as a
+    warning by load_ocv_curve rather than silently assumed.
 
     Returns (x_values, y_values, (soc_idx, ocv_idx)).
     """
     if column_choice is None:
-        column_choice = show_column_selection_dialog(df, file_label)
-        if column_choice is None:
-            raise DataFormatError("Column selection cancelled by user.")
+        if column_resolver is not None:
+            column_choice = column_resolver(df, file_label)
+            if column_choice is None:
+                raise DataFormatError("Column selection cancelled by user.")
+        else:
+            column_choice = guess_column_roles(df)
 
     soc_idx, ocv_idx = column_choice
+    if soc_idx == ocv_idx:
+        raise DataFormatError("SOC and OCV must be different columns.")
     if soc_idx >= df.shape[1] or ocv_idx >= df.shape[1]:
         raise DataFormatError(
             f"Column mapping (SOC=col{soc_idx}, OCV=col{ocv_idx}) does not match "
@@ -600,7 +554,8 @@ def check_and_correct_orientation(x_values, y_values, curve_type):
     return x_data, y_data, False  # No correction needed
 
 
-def load_ocv_curve(file_path, curve_type, column_choice=None):
+def load_ocv_curve(file_path, curve_type, column_choice=None,
+                   column_resolver=None):
     """
     Load a single SOC/OCV file (.txt/.csv/.xlsx, any supported delimiter/
     decimal/header/footer/column-order layout) and return a clean,
@@ -610,8 +565,10 @@ def load_ocv_curve(file_path, curve_type, column_choice=None):
     - file_path: path to the input file.
     - curve_type: 'cathode', 'anode', or 'battery' (controls orientation
       convention, see check_and_correct_orientation).
-    - column_choice: optional (soc_idx, ocv_idx) to skip the column
-      confirmation dialog (used to reuse a folder-level choice).
+    - column_choice: optional (soc_idx, ocv_idx) to skip column
+      confirmation (used to reuse a folder-level choice).
+    - column_resolver: optional UI callback to confirm the columns; see
+      resolve_soc_ocv_columns.
 
     Returns:
     - x_final, y_final: numpy arrays, 1001 points each.
@@ -624,7 +581,13 @@ def load_ocv_curve(file_path, curve_type, column_choice=None):
 
     file_label = os.path.basename(file_path)
     x_values, y_values, used_columns = resolve_soc_ocv_columns(
-        df, file_label, column_choice)
+        df, file_label, column_choice, column_resolver)
+
+    if column_choice is None and column_resolver is None:
+        warnings.append(
+            f"Columns were auto-detected (SOC=col{used_columns[0]}, "
+            f"OCV=col{used_columns[1]}) because nothing confirmed them — "
+            "check this is right.")
 
     x_values, was_percentage = normalize_soc_scale(x_values)
     if was_percentage:
@@ -655,157 +618,95 @@ def _write_curve_file(x_values, y_values, output_path):
             file.write(f"{x:.6f}\t{y:.6f}\n")
 
 
-def show_curve_type_dialog():
+DATA_FILE_EXTENSIONS = ('.txt', '.csv', '.xlsx')
+
+
+def list_data_files(folder_path):
+    """Return the names of all supported data files in a folder, sorted."""
+    return sorted(f for f in os.listdir(folder_path)
+                  if f.lower().endswith(DATA_FILE_EXTENSIONS))
+
+
+def format_files(file_paths, curve_type, output_folder, column_resolver=None):
     """
-    Show a dialog to ask user what type of curves they're formatting.
+    Run the "Format Data" conversion over a list of files: each one is
+    parsed, cleaned and resampled to the project's standard 1001-point
+    layout, then written to output_folder as `<name>_FORMATTED.txt`.
 
-    Returns:
-    - str: 'cathode', 'anode', 'battery', 'mixed', or None if cancelled
+    The SOC/OCV column mapping is confirmed once (on the first file that
+    needs it) and reused for the rest of the batch, since a batch is
+    typically one consistent export format.
+
+    Parameters:
+    - file_paths: list of paths to the input files.
+    - curve_type: 'cathode', 'anode' or 'battery'.
+    - output_folder: directory to write the formatted files into (created
+      if missing).
+    - column_resolver: optional UI callback, see resolve_soc_ocv_columns.
+
+    Returns a report dict:
+    - 'output_folder': where the files were written.
+    - 'successful': list of output filenames written.
+    - 'warnings': {input filename: [warning strings]} for files that were
+      written but had something worth flagging.
+    - 'failed': {input filename: reason} for files that could not be
+      converted. One bad file does not abort the rest of the batch.
     """
-    result = [None]  # Use list to allow modification in nested function
-
-    def on_selection(choice):
-        result[0] = choice
-        dialog.destroy()
-
-    # Create dialog window
-    dialog = Toplevel()
-    dialog.title("Curve Type Selection")
-    dialog.geometry("600x300")  # Larger default size
-    dialog.minsize(500, 250)     # Minimum size
-    dialog.resizable(True, True) # Allow resizing
-    dialog.configure(bg="#2C2F33")
-
-    # Center the dialog
-    dialog.transient()
-    dialog.grab_set()
-
-    # Add instruction label
-    label = Label(dialog,
-                 text="What type of curves are you formatting?",
-                 font=("Arial", 12, "bold"),
-                 bg="#2C2F33", fg="white")
-    label.pack(pady=20)
-
-    # Create button frame
-    button_frame = Frame(dialog, bg="#2C2F33")
-    button_frame.pack(pady=10)
-
-    # Add buttons for each option
-    buttons_info = [
-        ("Cathode OCP", "cathode"),
-        ("Anode OCP", "anode"),
-        ("Battery OCV", "battery"),
-        ("Mixed Types", "mixed")
-    ]
-
-    for text, value in buttons_info:
-        btn = Button(button_frame, text=text,
-                    command=lambda v=value: on_selection(v),
-                    width=12, height=1,
-                    font=("Arial", 10))
-        btn.pack(side="left", padx=5)
-
-    # Add cancel button
-    cancel_btn = Button(dialog, text="Cancel",
-                       command=lambda: on_selection(None),
-                       font=("Arial", 10))
-    cancel_btn.pack(pady=(10, 20))
-
-    # Wait for dialog to close
-    dialog.wait_window()
-
-    return result[0]
-
-
-def format_folder_data():
-    """
-    Main function to format all data files (.txt/.csv/.xlsx) in a selected
-    folder. Opens file dialog, processes all files, creates _FORMATTED
-    folder and files.
-    """
-    # Open folder selection dialog
-    folder_path = filedialog.askdirectory(
-        title="Select folder containing data files to format"
-    )
-
-    if not folder_path:
-        return  # User cancelled
-
-    # Get all supported data files in the folder
-    data_files = [f for f in os.listdir(folder_path)
-                  if f.lower().endswith(('.txt', '.csv', '.xlsx'))]
-
-    if not data_files:
-        messagebox.showwarning("No Files", "No .txt/.csv/.xlsx files found in the selected folder.")
-        return
-
-    # Ask user about curve type
-    curve_type = show_curve_type_dialog()
-
-    if curve_type is None:
-        return  # User cancelled
-
-    if curve_type == 'mixed':
-        messagebox.showinfo("Mixed Types",
-                          "Please separate your data into different folders according to curve type:\n"
-                          "- Cathode OCP files in one folder\n"
-                          "- Anode OCP files in another folder\n"
-                          "- Battery OCV files in a third folder\n\n"
-                          "Then run the formatter on each folder separately.")
-        return
-
-    # Create output folder with _FORMATTED suffix
-    folder_name = os.path.basename(folder_path)
-    parent_dir = os.path.dirname(folder_path)
-    output_folder = os.path.join(parent_dir, f"{folder_name}_FORMATTED")
-
-    # Create output directory if it doesn't exist
     os.makedirs(output_folder, exist_ok=True)
 
-    # Process each data file
-    successful_files = 0
-    failed_files = 0
-    file_warnings = {}
-    failed_reasons = {}
-    column_choice = None  # confirmed once, then reused across the folder
+    successful = []
+    warnings_by_file = {}
+    failed = {}
+    column_choice = None  # confirmed once, then reused across the batch
 
-    for data_file in data_files:
-        input_path = os.path.join(folder_path, data_file)
+    for input_path in file_paths:
+        data_file = os.path.basename(input_path)
         name_without_ext = os.path.splitext(data_file)[0]
         output_filename = f"{name_without_ext}_FORMATTED.txt"
-        output_path = os.path.join(output_folder, output_filename)
 
         try:
             x_final, y_final, warnings, used_columns = load_ocv_curve(
-                input_path, curve_type, column_choice=column_choice)
+                input_path, curve_type, column_choice=column_choice,
+                column_resolver=column_resolver)
             if column_choice is None:
                 column_choice = used_columns
-            _write_curve_file(x_final, y_final, output_path)
-            successful_files += 1
+            _write_curve_file(x_final, y_final,
+                              os.path.join(output_folder, output_filename))
+            successful.append(output_filename)
             if warnings:
-                file_warnings[data_file] = warnings
+                warnings_by_file[data_file] = warnings
         except Exception as e:
-            failed_files += 1
-            failed_reasons[data_file] = str(e)
+            failed[data_file] = str(e)
 
-    # Show results
-    message = f"Data formatting complete!\n\n"
-    message += f"Processed: {successful_files} files successfully\n"
-    if failed_files > 0:
-        message += f"Failed: {failed_files} files\n"
-    message += f"Curve type: {curve_type.title()}\n"
-    message += f"\nFormatted files saved to:\n{output_folder}\n"
+    return {
+        'output_folder': output_folder,
+        'successful': successful,
+        'warnings': warnings_by_file,
+        'failed': failed,
+    }
 
-    if file_warnings:
-        message += "\nWarnings:\n"
-        for fname, warns in file_warnings.items():
-            for w in warns:
-                message += f"- {fname}: {w}\n"
 
-    if failed_reasons:
-        message += "\nFailed files:\n"
-        for fname, reason in failed_reasons.items():
-            message += f"- {fname}: {reason}\n"
+def format_folder(folder_path, curve_type, output_folder=None,
+                  column_resolver=None):
+    """
+    Format every supported data file in a folder. By default the results go
+    to a sibling `<folder>_FORMATTED` directory, matching what the desktop
+    app has always done.
 
-    messagebox.showinfo("Formatting Complete", message)
+    Raises DataFormatError if the folder holds no supported data files.
+    Returns the same report dict as format_files.
+    """
+    data_files = list_data_files(folder_path)
+    if not data_files:
+        raise DataFormatError(
+            "No .txt/.csv/.xlsx files found in the selected folder.")
+
+    if output_folder is None:
+        folder_name = os.path.basename(os.path.normpath(folder_path))
+        output_folder = os.path.join(
+            os.path.dirname(os.path.normpath(folder_path)),
+            f"{folder_name}_FORMATTED")
+
+    file_paths = [os.path.join(folder_path, f) for f in data_files]
+    return format_files(file_paths, curve_type, output_folder,
+                        column_resolver=column_resolver)

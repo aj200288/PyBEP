@@ -54,24 +54,54 @@ Before installing the package, ensure you have the following prerequisites:
    cd PyBEP
    ```
 
-3. Install the package using `pip`:
+3. Install the dependencies:
    ```sh
-   pip install .
+   pip install -r requirements.txt
    ```
 
 ### Usage
 
-Once installed, you can easily launch the GUI for PyBEP:
+Launch the desktop app from the project directory:
 
-1. Open a terminal or command prompt.
-2. Navigate to the project directory if you haven't already.
-3. Run the following command to launch the GUI:
-   ```sh
-   python -m src.OCV_GUI_module.GUI
-   ```
-   This command will open the GUI interface, allowing you to perform battery OCV decomposition effortlessly.
+```sh
+python -m gui_app
+```
 
-That's it! You're now ready to use the GUI for battery OCV decomposition analysis.
+This opens the GUI, allowing you to perform battery OCV decomposition effortlessly.
+
+To run the website locally instead:
+
+```sh
+python -m web        # then open http://localhost:5000
+```
+
+## Project structure
+
+PyBEP ships two front ends over one shared calculation core, so a fix to the
+science reaches both at once:
+
+```
+core/       Calculation and file parsing. No user interface of any kind.
+gui_app/    The desktop app (Tkinter).   ─┬─ both build on core/
+web/        The website (Flask).         ─┘
+tests/      Checks for all three.
+data/       Example half-cell and full-cell curves.
+```
+
+**`core/` must never import tkinter, flask, or any other UI toolkit.** That
+rule is what keeps the two front ends from drifting into separate copies of
+the same code, and it's what lets the website run on a server with no
+display. Where the user has to make a choice — which column is SOC, which is
+OCV — core takes a callback instead of opening anything itself
+(`column_resolver`, see `core/data_formatter.py`). The desktop app passes its
+Tkinter dialog; the website passes what the user picked in the browser form.
+
+If you change a function in `core/`, check both `gui_app/` and `web/` still
+call it correctly, and run the tests:
+
+```sh
+python tests/run_all.py
+```
 
 
 <!-- USAGE EXAMPLES -->
@@ -171,9 +201,59 @@ Each file contains **1001 points**.
    - Coordinates were exported via `.IGS` files and converted to `.txt` format.
    - Python was used for final interpolation and formatting.
 
+## Using the website
+
+The website offers the same two features as the desktop app, for people who
+would rather not install Python:
+
+* **Run optimization** — upload cathode candidates, anode candidates and a
+  battery OCV file, confirm the detected SOC/OCV columns, and get the plot,
+  the best cathode/anode/parameters/RMSD, and the result JSON.
+* **Format data** — upload raw files, choose the curve type, and download the
+  formatted 1001-point set as a zip.
+
+Run it locally with `python -m web`. For a real deployment, serve the same
+app factory with a production server rather than Flask's development one:
+
+```sh
+waitress-serve --port=8000 --call web:create_app      # Windows
+gunicorn 'web:create_app()' -b 0.0.0.0:8000           # Linux hosts
+```
+
+Set `SECRET_KEY` in the environment (it signs the session cookie). A few
+limits in `web/__init__.py` exist because the optimization is expensive and
+the site is public — work grows as *cathodes × anodes × iterations*, so
+iterations are capped at 5, batches at 12 files per electrode, and uploads at
+32 MB. Raise them only alongside a real job queue or request timeout.
+`PYBEP_N_JOBS` controls how many worker processes the optimization uses
+(default 2; small hosts report more CPUs than they actually give you).
+
+The upload → results flow keeps its state in a per-session temp directory,
+which assumes a single running instance. Running several instances behind a
+load balancer would need shared storage instead.
+
 ## Using `perform_full_optimization_parallel_to_json()` function
 
-If you prefer not to use the GUI, you can directly use the `perform_full_optimization_parallel_to_json()` function. It accepts the same arguments explained in the Usage of the GUI section and returns the same JSON file obtained by pressing the "Download result" button in the GUI. You can import the function from optimization_functons.py.
+If you prefer not to use either front end, you can call the calculation code
+directly — everything is exported from `core`:
+
+```python
+from core import (add_half_cell_data, load_soc_ocv_data,
+                  perform_full_optimization_parallel_to_json)
+
+cathodes = add_half_cell_data("data/cathode_data", curve_type="cathode")
+anodes = add_half_cell_data("data/anode_data", curve_type="anode")
+soc, ocv = load_soc_ocv_data("data/NMC811vsGraphite_OCV-LICeM.txt")
+
+perform_full_optimization_parallel_to_json(
+    "result.json", ".", soc, ocv, cathodes, anodes, iterations=1)
+```
+
+It accepts the same arguments explained in the Usage of the GUI section and
+writes the same JSON file obtained by pressing the "Download result" button
+in the GUI. With no dialog and no browser form to confirm the SOC/OCV
+columns, they are auto-detected and the choice is reported in the returned
+warnings — check it is right.
 
 ## ⚠️ Attention
 
@@ -185,7 +265,16 @@ We appreciate your understanding and encourage you to reach out if you notice an
 
 New in this release:
 
-- Format Data: The GUI now includes a "Format Data" button in the left pane that attempts to reformat and standardize raw `.txt` data files into the project's expected 1001-point format. This is intended to help users quickly prepare datasets for optimization without manual preprocessing.
+- Website: PyBEP is now also usable in a browser, with the same features as
+  the desktop app — see [Using the website](#using-the-website) above.
+
+- Restructure: the calculation code moved out of `src/OCV_GUI_module/` into
+  `core/`, with the desktop app in `gui_app/` and the website in `web/`. If
+  you were importing `OCV_GUI_module.<something>`, import from `core`
+  instead. Launch the desktop app with `python -m gui_app` (previously
+  `python -m src.OCV_GUI_module.GUI`).
+
+- Format Data: The GUI now includes a "Format Data" button in the left pane that attempts to reformat and standardize raw `.txt` data files into the project's expected 1001-point format. This is intended to help users quickly prepare datasets for optimization without manual preprocessing. The website offers the same thing under "Format data".
 
    Important warning: The automatic formatter is a convenience tool and is not bulletproof. It may fail or produce imperfect results for files with unusual layouts, noisy measurements, inconsistent delimiters, or embedded comments. We do NOT guarantee it will always produce correct or usable results. You should always review the output before running optimizations, and manually format your data when possible.
 

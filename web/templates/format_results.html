@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="card" style="width: min(720px, 95vw);">
+  <h1>Formatting complete</h1>
+  <p>{{ report.successful|length }} of {{ report.successful|length + report.failed|length }}
+     {{ curve_type }} file(s) converted.</p>
+
+  {% if have_zip %}
+  <div class="results-header">
+    <span class="label">Formatted files</span>
+    <form method="GET" action="{{ url_for('main.format_download') }}">
+      <button class="download-btn" type="submit">Download zip</button>
+    </form>
+  </div>
+  <ul class="file-list">
+    {% for name in report.successful %}<li>{{ name }}</li>{% endfor %}
+  </ul>
+  {% else %}
+  <div class="banner banner-error">No files could be converted.</div>
+  {% endif %}
+
+  {% if report.warnings %}
+  <div class="banner banner-warning">
+    <strong>Warnings:</strong>
+    <ul>
+      {% for fname, warns in report.warnings.items() %}
+        {% for w in warns %}<li>{{ fname }}: {{ w }}</li>{% endfor %}
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if report.failed %}
+  <div class="banner banner-error">
+    <strong>Failed files:</strong>
+    <ul>
+      {% for fname, reason in report.failed.items() %}<li>{{ fname }}: {{ reason }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="actions">
+    <a class="secondary link-button" href="{{ url_for('main.format_form') }}">Format more files</a>
+    <a class="secondary link-button" href="{{ url_for('main.index') }}">Run an optimization</a>
+  </div>
+</main>
+{% endblock %}
