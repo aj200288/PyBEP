@@ -4,7 +4,7 @@ Smoke checks for the desktop app.
 The point of these is not to drive the UI, it's to catch the two things
 that silently break when core/gui_app/web are refactored:
 
-  * importing gui_app must not open a window (it used to build a Tk root at
+  * importing pybep.gui_app must not open a window (it used to build a Tk root at
     import time, which made the module unusable from anywhere else), and
   * the window must still construct with all its widgets after core
     changes shape.
@@ -36,11 +36,11 @@ except Exception as e:
 
 # Importing must not create a window. If it did, the Tk default root would
 # already exist by the time we get here.
-import gui_app.main as gui_main  # noqa: E402
+import pybep.gui_app.main as gui_main  # noqa: E402
 
-check("importing gui_app.main opens no window",
+check("importing pybep.gui_app.main opens no window",
       tk._default_root is None, tk._default_root)
-check("gui_app.main exposes main()", callable(gui_main.main))
+check("pybep.gui_app.main exposes main()", callable(gui_main.main))
 
 root = tk.Tk()
 root.withdraw()  # build the widgets without flashing a window on screen

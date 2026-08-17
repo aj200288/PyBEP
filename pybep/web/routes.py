@@ -13,7 +13,7 @@ import os
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    session, flash, send_file, abort, current_app)
 
-from core import DataFormatError
+from ..core import DataFormatError
 from . import pipeline
 
 bp = Blueprint('main', __name__)

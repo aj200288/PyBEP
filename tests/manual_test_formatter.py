@@ -1,5 +1,5 @@
 """
-Interactive manual test for core/data_formatter.py.
+Interactive manual test for pybep/core/data_formatter.py.
 
 Lets you pick one or more real data files via a file dialog, runs each
 through the real load_ocv_curve() pipeline (including the real Tk column-
@@ -16,8 +16,8 @@ from tkinter import filedialog
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from core import load_ocv_curve, DataFormatError
-from gui_app.dialogs import show_column_selection_dialog
+from pybep.core import load_ocv_curve, DataFormatError
+from pybep.gui_app.dialogs import show_column_selection_dialog
 
 CURVE_TYPES = ("cathode", "anode", "battery")
 

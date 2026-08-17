@@ -13,7 +13,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from core.data_formatter import (
+from pybep.core.data_formatter import (
     read_raw_table, resolve_soc_ocv_columns, normalize_soc_scale,
     ensure_monotonic, load_ocv_curve, DataFormatError, guess_column_roles
 )
@@ -116,7 +116,7 @@ check("load_ocv_curve non_monotonic: 1001 points, monotonic warning present",
 # --- the core/UI seam -------------------------------------------------
 # core must never import a UI toolkit; it asks for one via column_resolver.
 
-import core  # noqa: E402
+from pybep import core  # noqa: E402
 import tempfile  # noqa: E402
 
 check("core does not pull in tkinter",

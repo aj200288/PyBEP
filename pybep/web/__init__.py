@@ -1,10 +1,10 @@
 """
 PyBEP website (Flask). Run the development server with::
 
-    python -m web
+    python -m pybep.web
 
-All calculation and file parsing comes from ``core`` — the same code the
-desktop app runs. See web/pipeline.py.
+All calculation and file parsing comes from ``pybep.core`` — the same
+code the desktop app runs. See pipeline.py.
 """
 import os
 

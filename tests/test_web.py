@@ -17,7 +17,7 @@ import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from web import create_app, MAX_ITERATIONS  # noqa: E402
+from pybep.web import create_app, MAX_ITERATIONS  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
@@ -49,7 +49,7 @@ with app.test_request_context(
         "/upload", method="POST",
         data={"iterations": "999999999", "slider_a": "0.3"}):
     from flask import request
-    from web.routes import _clamp_settings
+    from pybep.web.routes import _clamp_settings
     settings = _clamp_settings(request.form)
 check(f"iterations clamped to {MAX_ITERATIONS}",
       settings["iterations"] == MAX_ITERATIONS, settings["iterations"])

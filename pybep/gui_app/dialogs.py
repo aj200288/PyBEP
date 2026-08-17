@@ -1,7 +1,7 @@
 """
 Tkinter dialogs for the desktop app.
 
-These used to live in core/data_formatter.py, which meant importing the
+These used to live in pybep/core/data_formatter.py, which meant importing the
 parsing code pulled in tkinter and made it unusable on a headless server.
 They live here now, and core reaches them only through the
 ``column_resolver`` callback it accepts — see
@@ -10,7 +10,7 @@ core.data_formatter.resolve_soc_ocv_columns.
 from tkinter import (filedialog, messagebox, Toplevel, Button, Label, Frame,
                      StringVar, Radiobutton)
 
-from core import guess_column_roles, format_folder, DataFormatError
+from ..core import guess_column_roles, format_folder, DataFormatError
 
 
 def show_column_selection_dialog(df, file_label):

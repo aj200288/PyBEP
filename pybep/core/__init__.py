@@ -13,8 +13,8 @@ choice, core takes a callback instead (see
 
 Typical use::
 
-    from core import add_half_cell_data, load_soc_ocv_data
-    from core import perform_full_optimization_parallel
+    from pybep.core import add_half_cell_data, load_soc_ocv_data
+    from pybep.core import perform_full_optimization_parallel
 
     cathodes = add_half_cell_data("data/cathode_data", curve_type="cathode")
     anodes = add_half_cell_data("data/anode_data", curve_type="anode")

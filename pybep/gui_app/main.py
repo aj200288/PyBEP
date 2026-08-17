@@ -1,10 +1,10 @@
 """
 PyBEP desktop app (Tkinter). Run it with::
 
-    python -m gui_app
+    python -m pybep.gui_app
 
-All calculation and file parsing comes from ``core``; this module only
-builds the window and wires the buttons up.
+All calculation and file parsing comes from ``pybep.core``; this module
+only builds the window and wires the buttons up.
 """
 import os
 import tkinter as tk
@@ -13,15 +13,17 @@ from PIL import Image, ImageTk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from core import (save_optimization_result_to_json,
+from ..core import (save_optimization_result_to_json,
                   perform_full_optimization_parallel,
                   add_half_cell_data,
                   load_soc_ocv_data,
                   DataFormatError)
 from .dialogs import format_folder_data, show_column_selection_dialog
 
-# Repo root, used to find the LICEM logo images (gui_app/main.py -> repo root)
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Repo root, used to find the LICEM logo images
+# (pybep/gui_app/main.py -> pybep/gui_app -> pybep -> repo root)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))
 
 
 class OCVBatteryDecompositionGUI:

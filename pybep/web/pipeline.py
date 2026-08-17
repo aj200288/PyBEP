@@ -22,7 +22,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
 
-from core import (
+from ..core import (
     DataFormatError,
     read_raw_table,
     guess_column_roles,
