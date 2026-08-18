@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 <main class="card">
-  <h1>PyBEP</h1>
-  <p>Upload your battery OCV curve and pick which reference electrodes to compare it against.</p>
+  {# The brand is in the header now, so the card heading names the task. #}
+  <h1>Run optimization</h1>
+  <p>Choose a battery OCV curve and the reference electrodes to compare it against.</p>
 
   {% with messages = get_flashed_messages(category_filter=["error"]) %}
     {% if messages %}
@@ -83,28 +84,9 @@
     {{ candidate_group('cathode', cathode_library, 'library_cathodes', 'cathode_files', 'Cathode candidates') }}
     {{ candidate_group('anode', anode_library, 'library_anodes', 'anode_files', 'Anode candidates') }}
 
-    <div class="slider-group">
-      <label for="slider-iterations">Iterations (1&ndash;{{ max_iterations }})</label>
-      <input id="slider-iterations" type="range" min="1" max="{{ max_iterations }}" step="1" value="1" name="iterations"
-        oninput="document.getElementById('iterationsValue').textContent=this.value"/>
-      <div class="slider-value">Value: <span id="iterationsValue">1</span></div>
-      <span class="file-hint">More iterations give more consistent results but take longer.</span>
-    </div>
-
-    <div class="slider-group">
-      <label for="slider-a">Battery weight (0&ndash;1, step 0.05)</label>
-      <input id="slider-a" type="range" min="0" max="1" step="0.05" value="1" name="slider_a"
-        oninput="updateSliders('a')"/>
-      <div class="slider-value">Value: <span id="aValue">1.00</span></div>
-    </div>
-
-    <div class="slider-group">
-      <label for="slider-b">Differential capacity weight (0&ndash;1, step 0.05)</label>
-      <input id="slider-b" type="range" min="0" max="1" step="0.05" value="0"
-        oninput="updateSliders('b')"/>
-      <div class="slider-value">Value: <span id="bValue">0.00</span></div>
-      <span class="file-hint">The two weights always add up to 1 &mdash; moving one moves the other.</span>
-    </div>
+    {% with iterations=1, battery_weight=1.0, derivative_weight=0.0 %}
+      {% include "_settings.html" %}
+    {% endwith %}
 
     <div class="actions">
       <button class="primary" type="submit">Continue</button>
@@ -114,22 +96,6 @@
 </main>
 
 <script>
-  const sliderA = document.getElementById('slider-a');
-  const sliderB = document.getElementById('slider-b');
-  const aValue = document.getElementById('aValue');
-  const bValue = document.getElementById('bValue');
-
-  // Only slider A is submitted; the server derives the differential
-  // capacity weight as 1 - A, so the two can never disagree.
-  function updateSliders(changed) {
-    if (changed === 'a') {
-      sliderB.value = (1 - parseFloat(sliderA.value)).toFixed(2);
-    } else {
-      sliderA.value = (1 - parseFloat(sliderB.value)).toFixed(2);
-    }
-    syncSliderLabels();
-  }
-
   // The file picker only appears for "Upload my own file". Its `required`
   // has to come off with it — a hidden required input blocks submission
   // with a validation message the browser can't show anywhere.
@@ -170,13 +136,5 @@
     updateCount(field);
   });
 
-  function syncSliderLabels() {
-    aValue.textContent = parseFloat(sliderA.value).toFixed(2);
-    bValue.textContent = parseFloat(sliderB.value).toFixed(2);
-    document.getElementById('iterationsValue').textContent =
-      document.getElementById('slider-iterations').value;
-  }
-
-  syncSliderLabels();
 </script>
 {% endblock %}

@@ -332,13 +332,66 @@ check("an invented battery name is refused",
       "one of the available files" in resp.get_data(as_text=True),
       re.findall(r"<li>(.*?)</li>", resp.get_data(as_text=True)))
 
-# --- uploads are not kept ---------------------------------------------
+# --- adjust settings and re-run ----------------------------------------
+# Re-run the uploaded-battery flow so there is an upload to reuse.
+resp = client.post("/upload", data={
+    "battery_file": [upload_file(battery)],
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1",
+    "slider_a": "1",
+}, content_type="multipart/form-data")
+fid = re.findall(r'name="soc_([0-9a-f]{32})"', resp.get_data(as_text=True))[0]
+body = client.post("/confirm", data={f"soc_{fid}": "0", f"ocv_{fid}": "1"}) \
+             .get_data(as_text=True)
+check("the results page offers a re-run without re-picking files",
+      'href="/adjust"' in body, [l for l in body.splitlines() if "adjust" in l])
+
+resp = client.get("/adjust")
+adjust_page = resp.get_data(as_text=True)
+check("the adjust page loads", resp.status_code == 200, resp.status_code)
+check("it says what is being reused",
+      "1 cathode(s) &times; 1 anode(s)" in adjust_page
+      and os.path.splitext(os.path.basename(battery))[0] in adjust_page,
+      [l.strip() for l in adjust_page.splitlines() if "result-item" in l][:2])
+check("the sliders start from the settings just used",
+      'value="1" name="iterations"' in adjust_page
+      and 'value="1.0" name="slider_a"' in adjust_page,
+      re.findall(r'<input id="slider-\w+"[^>]*value="[^"]*"[^>]*>', adjust_page))
+
 with client.session_transaction() as sess:
     workdir = sess["workdir"]
-check("uploaded files are deleted after the run",
-      not os.path.isdir(os.path.join(workdir, "battery")), workdir)
+check("the uploaded file survives so it can be reused",
+      os.path.isdir(os.path.join(workdir, "battery")), workdir)
+
+resp = client.post("/adjust", data={"iterations": "2", "slider_a": "0.4"})
+body = resp.get_data(as_text=True)
+check("re-running produces fresh results", resp.status_code == 200
+      and 'src="data:image/png;base64,' in body, resp.status_code)
+check("the new settings were applied, not the old ones",
+      "2 iteration(s)" in body and "battery 0.40" in body
+      and "diff. capacity 0.60" in body,
+      [l.strip() for l in body.splitlines() if "iteration(s)" in l])
+check("the same curves were reused",
+      re.search(r"1 cathode\(s\) (?:&times;|×) 1 anode\(s\)", body) is not None)
 check("the downloadable result survives",
       os.path.exists(os.path.join(workdir, "result.json")), workdir)
+
+# Starting over must wipe the previous session's uploads.
+old_workdir = workdir
+client.post("/upload", data={
+    "battery_choice": lib_batteries[0],
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1",
+}, content_type="multipart/form-data")
+check("a new run wipes the previous run's uploads",
+      not os.path.isdir(old_workdir), old_workdir)
+
+client.get("/")  # drop any flash left over before the checks below
+resp = client.get("/adjust", follow_redirects=True)
+check("adjust after the files are gone redirects instead of erroring",
+      resp.status_code == 200, resp.status_code)
 
 # --- deselecting everything is refused --------------------------------
 resp = client.post("/upload", data={

@@ -9,6 +9,7 @@ the small hosts this is aimed at give you anyway. Running several
 instances behind a load balancer would need shared storage instead.
 """
 import os
+from collections import Counter
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    session, flash, send_file, abort, current_app)
@@ -180,6 +181,7 @@ def upload():
         # Everything came from the library, so there are no columns to
         # confirm — go straight to the answer instead of showing an
         # empty confirmation page.
+        session['choices'] = {}
         return _run_and_render(files_meta, {}, session['settings'], workdir)
 
     return render_template('confirm.html', previews=previews, errors=errors)
@@ -205,7 +207,50 @@ def confirm():
             except ValueError:
                 pass  # reported as a missing curve below
 
+    # Kept so /adjust can re-run without asking about columns again.
+    session['choices'] = choices
     return _run_and_render(files_meta, choices, settings, workdir)
+
+
+@bp.route('/adjust', methods=['GET', 'POST'])
+def adjust():
+    """
+    Re-run the last optimization with different settings, reusing the
+    curves already chosen — the point being not to pick the files again
+    just to try three iterations instead of one.
+    """
+    files_meta = session.get('files')
+    settings = session.get('settings')
+    workdir = session.get('workdir')
+
+    if files_meta is None or not settings or not workdir or not os.path.isdir(workdir):
+        flash("Your previous run has expired, please start again.", "error")
+        return redirect(url_for('main.index'))
+
+    if any(not os.path.exists(meta['path']) for meta in files_meta):
+        flash("The files from your last run are no longer available, "
+              "please start again.", "error")
+        return redirect(url_for('main.index'))
+
+    if request.method == 'POST':
+        settings = _clamp_settings(request.form)
+        session['settings'] = settings
+        return _run_and_render(files_meta, session.get('choices') or {},
+                               settings, workdir)
+
+    chosen = session.get('library') or {}
+    uploaded = Counter(meta['curve_type'] for meta in files_meta)
+    battery_upload = next((meta for meta in files_meta
+                           if meta['curve_type'] == 'battery'), None)
+
+    return render_template(
+        'adjust.html',
+        settings=settings,
+        max_iterations=current_app.config['MAX_ITERATIONS'],
+        n_cathodes=len(chosen.get('cathode', [])) + uploaded['cathode'],
+        n_anodes=len(chosen.get('anode', [])) + uploaded['anode'],
+        battery_source=session.get('battery_choice')
+                       or pipeline.curve_label(battery_upload['path']))
 
 
 def _run_and_render(files_meta, choices, settings, workdir):
@@ -268,10 +313,9 @@ def _run_and_render(files_meta, choices, settings, workdir):
         flash(f"Optimization failed: {e}", "error")
         return redirect(url_for('main.index'))
 
-    # The uploaded files have been read; nothing needs them again.
-    pipeline.discard_uploads(workdir)
-    session.pop('files', None)
-
+    # The uploads stay in the session's temp directory so /adjust can run
+    # them again with different settings. They are wiped when the user
+    # starts a new run (create_session_workdir) and never enter data/.
     context['warnings'] = warnings
     context['settings'] = settings
     context['n_cathodes'] = len(cathodes)

@@ -128,7 +128,7 @@ def render_result_plot(battery_soc, battery_ocv, result):
     ax.plot(result['a_SOC_full'], result['w1_ns_x_a1_ns'], 'r--')
     ax.plot(result['a_SOC'], result['w1_x_a1'], 'k-', label='Optimized Anode OCP')
     ax.set_title("Optimization graph", fontsize=20, fontweight="bold",
-                 color="#79c0ff", pad=20)
+                 color="#00223f", pad=20)  # the logo navy
     ax.set_xlabel('SOC (% / 100)')
     ax.set_ylabel('OCV (V)')
     ax.grid(True)
@@ -157,8 +157,8 @@ def render_curve_preview(curve_type, name):
     x, y = points
 
     fig, ax = plt.subplots(figsize=CURVE_PREVIEW_SIZE)
-    ax.plot(x, y, '-', color='#1f6feb')
-    ax.set_title(name, fontsize=9)
+    ax.plot(x, y, '-', color='#0c78b4')  # the logo blue
+    ax.set_title(name, fontsize=9, color='#00223f')
     ax.set_xlabel('SOC (% / 100)', fontsize=8)
     ax.set_ylabel('OCP (V)', fontsize=8)
     ax.tick_params(labelsize=7)
@@ -192,19 +192,6 @@ def result_download_path(workdir, fmt):
         with open(source, encoding='utf-8') as f:
             write_result_as(json.load(f), target, fmt)
     return target
-
-
-def discard_uploads(workdir):
-    """
-    Delete the uploaded curve files once they have been parsed.
-
-    Uploads are for one run only — they never join the library in data/ —
-    so there is no reason to keep the raw files around after the numbers
-    have been read out of them. result.json stays, since /download serves
-    it.
-    """
-    for curve_type in ('cathode', 'anode', 'battery'):
-        shutil.rmtree(os.path.join(workdir, curve_type), ignore_errors=True)
 
 
 def run_optimization(cathodes, anodes, battery_soc, battery_ocv, settings,

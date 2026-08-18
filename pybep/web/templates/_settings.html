@@ -1,0 +1,53 @@
+{#
+  The optimization settings controls, shared by the front page and the
+  "adjust and re-run" page so the two can never drift apart.
+
+  Expects: max_iterations, iterations, battery_weight, derivative_weight.
+#}
+<div class="slider-group">
+  <label for="slider-iterations">Iterations (1&ndash;{{ max_iterations }})</label>
+  <input id="slider-iterations" type="range" min="1" max="{{ max_iterations }}" step="1"
+         value="{{ iterations }}" name="iterations" oninput="syncSliderLabels()"/>
+  <div class="slider-value">Value: <span id="iterationsValue">{{ iterations }}</span></div>
+  <span class="file-hint">More iterations give more consistent results but take longer.</span>
+</div>
+
+<div class="slider-group">
+  <label for="slider-a">Battery weight (0&ndash;1, step 0.05)</label>
+  <input id="slider-a" type="range" min="0" max="1" step="0.05"
+         value="{{ battery_weight }}" name="slider_a" oninput="updateSliders('a')"/>
+  <div class="slider-value">Value: <span id="aValue">{{ "%.2f"|format(battery_weight) }}</span></div>
+</div>
+
+<div class="slider-group">
+  <label for="slider-b">Differential capacity weight (0&ndash;1, step 0.05)</label>
+  <input id="slider-b" type="range" min="0" max="1" step="0.05"
+         value="{{ derivative_weight }}" oninput="updateSliders('b')"/>
+  <div class="slider-value">Value: <span id="bValue">{{ "%.2f"|format(derivative_weight) }}</span></div>
+  <span class="file-hint">The two weights always add up to 1 &mdash; moving one moves the other.</span>
+</div>
+
+<script>
+  const sliderA = document.getElementById('slider-a');
+  const sliderB = document.getElementById('slider-b');
+
+  // Only slider A is submitted; the server derives the differential
+  // capacity weight as 1 - A, so the two can never disagree.
+  function updateSliders(changed) {
+    if (changed === 'a') {
+      sliderB.value = (1 - parseFloat(sliderA.value)).toFixed(2);
+    } else {
+      sliderA.value = (1 - parseFloat(sliderB.value)).toFixed(2);
+    }
+    syncSliderLabels();
+  }
+
+  function syncSliderLabels() {
+    document.getElementById('aValue').textContent = parseFloat(sliderA.value).toFixed(2);
+    document.getElementById('bValue').textContent = parseFloat(sliderB.value).toFixed(2);
+    document.getElementById('iterationsValue').textContent =
+      document.getElementById('slider-iterations').value;
+  }
+
+  syncSliderLabels();
+</script>
