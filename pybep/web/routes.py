@@ -9,6 +9,7 @@ the small hosts this is aimed at give you anyway. Running several
 instances behind a load balancer would need shared storage instead.
 """
 import os
+import tempfile
 from collections import Counter
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
@@ -60,6 +61,35 @@ def _clamp_settings(form):
         'battery_weight': battery_weight,
         'derivative_weight': derivative_weight,
     }
+
+
+def _session_workdir():
+    """
+    This session's working directory, or None if there isn't a usable one.
+
+    The path is checked rather than taken at face value: it arrives from a
+    cookie, and the routes below hand it to send_file. Belt and braces
+    alongside a strong SECRET_KEY.
+    """
+    workdir = session.get('workdir')
+    if not pipeline.is_session_workdir(workdir):
+        return None
+    real = os.path.realpath(workdir)
+    return real if os.path.isdir(real) else None
+
+
+def _safe_join(base, *parts):
+    """
+    Join under base, or None if the result would escape it.
+
+    For any path built from a value that travelled through the browser, so
+    that "../" in a name cannot reach outside the session's directory.
+    """
+    real_base = os.path.realpath(base)
+    target = os.path.realpath(os.path.join(real_base, *parts))
+    if target != real_base and not target.startswith(real_base + os.sep):
+        return None
+    return target
 
 
 def _uploaded(field):
@@ -208,7 +238,7 @@ def upload():
 def confirm():
     files_meta = session.get('files')
     settings = session.get('settings')
-    workdir = session.get('workdir')
+    workdir = _session_workdir()
 
     if files_meta is None or not settings or not workdir:
         flash("Your session expired, please start over.", "error")
@@ -238,9 +268,9 @@ def adjust():
     """
     files_meta = session.get('files')
     settings = session.get('settings')
-    workdir = session.get('workdir')
+    workdir = _session_workdir()
 
-    if files_meta is None or not settings or not workdir or not os.path.isdir(workdir):
+    if files_meta is None or not settings or not workdir:
         flash("Your previous run has expired, please start again.", "error")
         return redirect(url_for('main.index'))
 
@@ -260,14 +290,23 @@ def adjust():
     battery_upload = next((meta for meta in files_meta
                            if meta['curve_type'] == 'battery'), None)
 
+    battery_source = session.get('battery_choice')
+    if not battery_source:
+        if battery_upload is None:
+            # The battery file failed to parse, so that attempt never
+            # produced a run worth adjusting.
+            flash("That run had no usable battery curve, please start again.",
+                  "error")
+            return redirect(url_for('main.index'))
+        battery_source = pipeline.curve_label(battery_upload['path'])
+
     return render_template(
         'adjust.html',
         settings=settings,
         max_iterations=current_app.config['MAX_ITERATIONS'],
         n_cathodes=len(chosen.get('cathode', [])) + uploaded['cathode'],
         n_anodes=len(chosen.get('anode', [])) + uploaded['anode'],
-        battery_source=session.get('battery_choice')
-                       or pipeline.curve_label(battery_upload['path']))
+        battery_source=battery_source)
 
 
 def _run_and_render(files_meta, choices, settings, workdir):
@@ -311,7 +350,7 @@ def _run_and_render(files_meta, choices, settings, workdir):
                 target[label] = pipeline.build_curve_entry(x, y)
 
             warnings.extend(f"{label}: {msg}" for msg in file_warnings)
-        except (DataFormatError, ValueError) as e:
+        except (DataFormatError, ValueError, OSError) as e:
             errors.append(str(e))
 
     if battery_soc is None or not cathodes or not anodes:
@@ -356,7 +395,7 @@ def curve_preview(curve_type, name):
 
 @bp.route('/download')
 def download():
-    workdir = session.get('workdir')
+    workdir = _session_workdir()
     if not workdir:
         abort(404)
 
@@ -431,14 +470,15 @@ def format_run():
 @bp.route('/format/confirm', methods=['POST'])
 def format_confirm():
     state = session.get('format')
-    workdir = session.get('workdir')
+    workdir = _session_workdir()
 
-    if not state or not workdir or not os.path.isdir(workdir):
+    if not state or not workdir:
         flash("Your session expired, please choose the files again.", "error")
         return redirect(url_for('main.format_form'))
 
     curve_type = state['curve_type']
-    paths = [os.path.join(workdir, curve_type, name) for name in state['stored']]
+    paths = [_safe_join(workdir, curve_type, name) for name in state['stored']]
+    paths = [p for p in paths if p and os.path.isfile(p)]
 
     choices = {}
     for i, path in enumerate(paths):
@@ -471,13 +511,13 @@ def format_file(index):
     produced, so a URL can only ever reach that session's own output.
     """
     outputs = session.get('format_outputs') or []
-    workdir = session.get('workdir')
+    workdir = _session_workdir()
     if not workdir or not 0 <= index < len(outputs):
         abort(404)
 
     stored = outputs[index]
-    path = os.path.join(workdir, pipeline.FORMATTED_DIR, stored)
-    if not os.path.exists(path):
+    path = _safe_join(workdir, pipeline.FORMATTED_DIR, stored)
+    if not path or not os.path.isfile(path):
         abort(404)
     return send_file(path, as_attachment=True,
                      download_name=pipeline.original_name(stored),
@@ -491,3 +531,39 @@ def format_download():
         abort(404)
     return send_file(zip_path, as_attachment=True,
                      download_name='pybep_formatted_data.zip')
+
+
+# --- Error pages ------------------------------------------------------
+
+def register_error_handlers(app):
+    """
+    Show the site's own error pages instead of Werkzeug's bare ones.
+
+    413 is the one a real user meets by accident, by picking a file that
+    is simply too big, and the default page gives them no way back.
+    """
+    max_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+    pages = {
+        404: ("Page not found",
+              "That address does not exist. It may have been mistyped, or be "
+              "a link to a result that has since been replaced."),
+        405: ("Page not found",
+              "That address cannot be reached this way. Start from the front "
+              "page instead."),
+        413: ("Those files are too large",
+              f"Uploads are limited to {max_mb} MB in total. Try sending "
+              "fewer files at once, or trimming the data first."),
+        500: ("Something went wrong",
+              "The server hit an unexpected problem. Starting the run again "
+              "usually clears it; if it keeps happening, the file may be one "
+              "PyBEP cannot handle."),
+    }
+
+    def render_error(code):
+        heading, message = pages[code]
+        return render_template('error.html', code=code, heading=heading,
+                               message=message), code
+
+    for code in pages:
+        app.register_error_handler(code, lambda _e, code=code: render_error(code))
+

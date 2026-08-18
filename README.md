@@ -249,8 +249,14 @@ waitress-serve --port=8000 --call pybep.web:create_app   # Windows
 gunicorn 'pybep.web:create_app()' -b 0.0.0.0:8000        # Linux hosts
 ```
 
-Set `SECRET_KEY` in the environment (it signs the session cookie). A few
-limits in `web/__init__.py` exist because the optimization is expensive and
+**Set `SECRET_KEY` in the environment.** It signs the session cookie, and that
+cookie names the temporary directory the server reads a session's files from
+and later deletes. If it is unset, a random key is generated per process and a
+warning is printed — safe, but sessions are lost on restart and break entirely
+across multiple workers, so set it for anything real. There is deliberately no
+fixed fallback: a key committed to a public repository is a key everyone has.
+
+A few limits in `web/__init__.py` exist because the optimization is expensive and
 the site is public — work grows as *cathodes × anodes × iterations*, so
 iterations are capped at 5, candidates at 12 per electrode (library plus
 uploads), and uploads at 32 MB. For scale: the full built-in library is 7 × 2 =
@@ -262,7 +268,9 @@ timeout.
 
 The upload → results flow keeps its state in a per-session temp directory,
 which assumes a single running instance. Running several instances behind a
-load balancer would need shared storage instead.
+load balancer would need shared storage instead. Directories nothing has
+touched for six hours are swept up when the next one is created, so visitors
+who upload once and leave do not accumulate on disk.
 
 ## Using `perform_full_optimization_parallel_to_json()` function
 

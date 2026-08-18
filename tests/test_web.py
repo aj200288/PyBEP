@@ -91,6 +91,85 @@ def active_tab(html):
 check("the format tab stays lit through its own sub-pages",
       active_tab(client.get("/format").get_data(as_text=True)) == "/format")
 
+# --- hardening for a public deployment --------------------------------
+import re  # noqa: E402
+import shutil  # noqa: E402
+import tempfile  # noqa: E402
+from pybep.web import pipeline  # noqa: E402
+from pybep.web.routes import _safe_join  # noqa: E402
+
+check("the session key is never a fixed literal",
+      app.config["SECRET_KEY"] != "dev-secret-key-change-me"
+      and len(app.config["SECRET_KEY"]) >= 32,
+      "a key committed to a public repo lets anyone forge a session cookie")
+
+# The cookie names a directory that the server reads files from AND
+# deletes wholesale, so it must never be taken at face value. Everything
+# below is checked without ever handing a real path to the deleter.
+for hostile in (ROOT, os.path.dirname(ROOT), "C:\\Windows", "/etc",
+                os.path.join(tempfile.gettempdir(), ".."),
+                os.path.join(tempfile.gettempdir(), "notours"), "", None, 5):
+    check(f"a workdir of {str(hostile)[:28]!r} is not treated as ours",
+          not pipeline.is_session_workdir(hostile), hostile)
+
+own = tempfile.mkdtemp(prefix=pipeline.WORKDIR_PREFIX)
+check("a directory we really made is recognised",
+      pipeline.is_session_workdir(own), own)
+shutil.rmtree(own, ignore_errors=True)
+
+# create_session_workdir deletes what it is given; prove it refuses.
+guard_dir = tempfile.mkdtemp(prefix="not_pybep_")
+open(os.path.join(guard_dir, "precious.txt"), "w").write("keep me")
+made = pipeline.create_session_workdir(guard_dir)
+check("create_session_workdir will not delete a directory it did not make",
+      os.path.isfile(os.path.join(guard_dir, "precious.txt")), guard_dir)
+shutil.rmtree(guard_dir, ignore_errors=True)
+shutil.rmtree(made, ignore_errors=True)
+
+# The download routes must refuse a workdir outside the temp root. Point
+# the cookie at a path that does not exist, so nothing can be harmed.
+with client.session_transaction() as sess:
+    sess["workdir"] = os.path.join(ROOT, "no-such-dir")
+    sess["format_outputs"] = ["../setup.cfg"]
+check("a workdir outside the temp root serves nothing",
+      client.get("/format/file/0").status_code == 404
+      and client.get("/download").status_code == 404)
+
+for escape in ("../../setup.cfg", "..\\..\\setup.cfg", "/etc/passwd"):
+    joined = _safe_join(tempfile.gettempdir(), escape)
+    check(f"_safe_join contains {escape!r}",
+          joined is None
+          or joined.startswith(os.path.realpath(tempfile.gettempdir()) + os.sep),
+          joined)
+check("_safe_join allows an ordinary name",
+      _safe_join(tempfile.gettempdir(), "result.json") is not None)
+
+# Abandoned sessions must not pile up: a session only cleans up its own
+# predecessor, so nothing else would ever remove them.
+stale = tempfile.mkdtemp(prefix=pipeline.WORKDIR_PREFIX)
+fresh = tempfile.mkdtemp(prefix=pipeline.WORKDIR_PREFIX)
+os.utime(stale, (0, 0))
+pipeline.purge_stale_workdirs()
+check("abandoned working directories are swept up", not os.path.isdir(stale), stale)
+check("directories still in use are left alone", os.path.isdir(fresh), fresh)
+shutil.rmtree(fresh, ignore_errors=True)
+
+# Error pages a real visitor meets.
+for code, path in ((404, "/no-such-page"), (405, "/upload")):
+    r = client.get(path)
+    body = r.get_data(as_text=True)
+    check(f"{code} shows the site's own page with a way back",
+          r.status_code == code and "PyBEP" in body and "Run optimization" in body,
+          r.status_code)
+
+r = client.post("/upload", content_type="multipart/form-data", data={
+    "battery_file": [(io.BytesIO(b"x" * (33 * 1024 * 1024)), "huge.txt")]})
+body = r.get_data(as_text=True)
+check("an oversized upload explains the limit instead of showing a bare 413",
+      r.status_code == 413 and "PyBEP" in body and "MB" in body, r.status_code)
+
+client.get("/")  # clear any flash the probes left behind
+
 # --- input clamping (the reason a public site needs a server-side cap) ---
 with app.test_request_context(
         "/upload", method="POST",
@@ -562,6 +641,38 @@ if os.path.exists(indexed):
               len(rows3) == 1001 and abs(float(first[0])) < 1e-6
               and abs(float(last[0]) - 1) < 1e-6 and 2.4 < float(first[1]) < 2.6,
               (len(rows3), first, last))
+
+# --- recovering instead of crashing -----------------------------------
+# Both of these were 500s: a run whose battery file failed to parse, and a
+# session whose temp directory has since been cleaned away.
+recov = app.test_client()
+recov.post("/upload", content_type="multipart/form-data", data={
+    "battery_file": [(io.BytesIO(b"not data\nnor this\n"), "bad.txt")],
+    "cathode_files": [upload_file(cathode)],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1"})
+r = recov.get("/adjust", follow_redirects=True)
+check("adjusting a run with no usable battery curve redirects, not crashes",
+      r.status_code == 200 and "no usable battery curve" in r.get_data(as_text=True),
+      r.status_code)
+
+gone = app.test_client()
+r = gone.post("/upload", content_type="multipart/form-data", data={
+    "battery_file": [upload_file(battery)],
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1"})
+fid_gone = re.findall(r'name="soc_([0-9a-f]{32})"', r.get_data(as_text=True))[0]
+with gone.session_transaction() as sess:
+    doomed = sess["workdir"]
+check("the doomed path really is one of ours before removing it",
+      pipeline.is_session_workdir(doomed), doomed)
+shutil.rmtree(doomed, ignore_errors=True)
+r = gone.post("/confirm", follow_redirects=True,
+              data={f"soc_{fid_gone}": "0", f"ocv_{fid_gone}": "1"})
+check("confirming after the temp directory vanished redirects, not crashes",
+      r.status_code == 200 and "session expired" in r.get_data(as_text=True),
+      r.status_code)
 
 check("the format tab is still lit on the confirm and results pages",
       active_tab(body) == "/format"

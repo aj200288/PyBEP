@@ -20,8 +20,11 @@
 
     {# Each tab covers every route that belongs to it, so the highlight
        stays put through the confirm and results steps too. #}
-    {% set section = 'format' if request.endpoint.startswith('main.format')
-                     else ('help' if request.endpoint == 'main.help_page' else 'run') %}
+    {# request.endpoint is None on an error page, so never call a
+       string method on it directly. #}
+    {% set endpoint = request.endpoint or '' %}
+    {% set section = 'format' if endpoint.startswith('main.format')
+                     else ('help' if endpoint == 'main.help_page' else 'run') %}
     <nav class="site-nav">
       <a href="{{ url_for('main.index') }}"
          class="{{ 'is-active' if section == 'run' else '' }}">Run optimization</a>

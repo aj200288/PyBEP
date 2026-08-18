@@ -401,9 +401,6 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
 }
 .secondary:hover { background: var(--surface-sunk); border-color: var(--blue); }
 
-.ghost { background: transparent; color: var(--muted); }
-.ghost:hover { color: var(--ink); }
-
 .link-button {
   flex: 1;
   min-width: 110px;
@@ -808,16 +805,6 @@ a.download-btn {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-}
-
-.file-list {
-  text-align: left;
-  margin: 0 0 20px;
-  padding-left: 20px;
-  color: var(--muted);
-  font-size: 0.85rem;
-  max-height: 240px;
-  overflow-y: auto;
 }
 
 /* --- Footer --- */

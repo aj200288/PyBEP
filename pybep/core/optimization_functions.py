@@ -330,43 +330,6 @@ def save_optimization_result_to_json(result, filepath):
         json.dump(json_result, f)
 
 
-def perform_full_optimization_parallel_to_json_GUI(filename, SOC_battery,
-                                                   OCV_battery,
-                                                   interpolated_cathodes,
-                                                   interpolated_anodes,
-                                                   iterations=5,
-                                                   battery=1,
-                                                   derivative_inverse=0):
-    """
-    Perform parallelized full optimization for multiple iterations
-    and write the overall best optimization result to a JSON file.
-
-    Parameters:
-    - filename: str
-        Name of the JSON file to write the results.
-    - SOC_battery: array-like
-        State of charge (SOC) values for the battery.
-    - OCV_battery: array-like
-        Measured battery open-circuit voltage (OCV).
-    - interpolated_cathodes: dict
-        Dictionary containing information about interpolated cathode functions.
-    - interpolated_anodes: dict
-        Dictionary containing information about interpolated anode functions.
-    - iterations: int, optional
-        Number of iterations for optimization.
-    - battery, derivative_inverse: float, optional
-        Weighting factors for different components of the objective function.
-
-    Returns:
-    None
-    """
-    result = perform_full_optimization_parallel(
-        SOC_battery, OCV_battery, interpolated_cathodes, interpolated_anodes,
-        iterations=iterations, battery=battery,
-        derivative_inverse=derivative_inverse)
-    save_optimization_result_to_json(result, filename)
-
-
 def perform_full_optimization_parallel_to_json(filename, file_location,
                                                SOC_battery,
                                                OCV_battery,

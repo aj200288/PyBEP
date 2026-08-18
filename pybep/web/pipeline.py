@@ -16,6 +16,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import uuid
 import zipfile
 
@@ -45,15 +46,75 @@ def allowed_file(filename):
     return os.path.splitext(filename)[1].lower() in DATA_FILE_EXTENSIONS
 
 
+WORKDIR_PREFIX = 'pybep_'
+
+# How long an untouched session directory is kept. Generous, because
+# deleting one out from under somebody mid-run costs them the run; the
+# routes handle a vanished directory by asking them to start again.
+WORKDIR_MAX_AGE_SECONDS = 6 * 60 * 60
+
+
+def is_session_workdir(path):
+    """
+    True only for a directory this module could have created: directly
+    inside the temp root, with our prefix.
+
+    The check lives here rather than in the caller because the only thing
+    done with the answer is a recursive delete. The path arrives from a
+    session cookie, and a cookie is not evidence — without this a tampered
+    one names any directory on the server and create_session_workdir
+    removes it.
+    """
+    if not isinstance(path, str) or not path:
+        return False
+    real = os.path.realpath(path)
+    if os.path.dirname(real) != os.path.realpath(tempfile.gettempdir()):
+        return False
+    return os.path.basename(real).startswith(WORKDIR_PREFIX)
+
+
+def purge_stale_workdirs(max_age=WORKDIR_MAX_AGE_SECONDS):
+    """
+    Delete session directories nobody has touched for a while, and return
+    how many went.
+
+    A session only ever cleans up its own predecessor, so without this
+    every visitor who uploads once and never comes back strands a
+    directory permanently — on a public site that is an unbounded disk
+    leak. Called when a new session directory is made, which keeps up
+    easily and costs one listdir.
+    """
+    root = tempfile.gettempdir()
+    cutoff = time.time() - max_age
+    removed = 0
+    try:
+        names = os.listdir(root)
+    except OSError:
+        return 0
+
+    for name in names:
+        if not name.startswith(WORKDIR_PREFIX):
+            continue
+        path = os.path.join(root, name)
+        try:
+            if os.path.isdir(path) and os.path.getmtime(path) < cutoff:
+                shutil.rmtree(path, ignore_errors=True)
+                removed += 1
+        except OSError:
+            continue  # vanished under us, or not ours to remove
+    return removed
+
+
 def create_session_workdir(existing_workdir=None):
     """
     Create a fresh temp working directory for one upload session, removing
     any previous one for the same session first (bounds disk growth from
     repeated use).
     """
-    if existing_workdir and os.path.isdir(existing_workdir):
+    if is_session_workdir(existing_workdir) and os.path.isdir(existing_workdir):
         shutil.rmtree(existing_workdir, ignore_errors=True)
-    return tempfile.mkdtemp(prefix="pybep_")
+    purge_stale_workdirs()
+    return tempfile.mkdtemp(prefix=WORKDIR_PREFIX)
 
 
 def save_upload(file_storage, curve_type, workdir):

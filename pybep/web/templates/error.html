@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %} &middot; {{ code }}{% endblock %}
+{% block content %}
+<main class="card">
+  <h1>{{ heading }}</h1>
+  <p>{{ message }}</p>
+  <div class="actions">
+    <a class="primary link-button" href="{{ url_for('main.index') }}">Run optimization</a>
+    <a class="secondary link-button" href="{{ url_for('main.help_page') }}">Instructions</a>
+  </div>
+</main>
+{% endblock %}
