@@ -140,12 +140,20 @@
   <h2 id="formatting">Formatting data</h2>
   <p>
     <a href="{{ url_for('main.format_form') }}">Format data</a> runs the same
-    cleaning on your files and hands them back as a zip, without optimizing
-    anything: each becomes a plain two-column, 1001-point file. Use it to
-    standardise a set of measurements, or to see exactly what PyBEP made of an
-    awkward file. Files in one batch must all be the same kind of curve, since
-    the type decides which orientation is expected &mdash; rising voltage for
-    cathodes and full cells, falling for anodes.
+    cleaning on your files without optimizing anything: each becomes a plain
+    two-column, 1001-point file. Use it to standardise a set of measurements,
+    or to see exactly what PyBEP made of an awkward file.
+  </p>
+  <p>
+    Files in one batch must all be the same kind of curve, since the type
+    decides which orientation is expected &mdash; rising voltage for cathodes
+    and full cells, falling for anodes. You confirm the SOC and voltage columns
+    for each file first, the same way as before an optimization, so a file with
+    an unusual layout is never converted on a guess.
+  </p>
+  <p>
+    Each converted file can be downloaded on its own, or the whole batch as one
+    zip.
   </p>
 
   <h2 id="limits">Limits</h2>

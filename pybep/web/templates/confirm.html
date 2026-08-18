@@ -30,38 +30,9 @@
   <form method="POST" action="{{ url_for('main.confirm') }}">
     <div class="confirm-list">
       {% for p in previews %}
-      <div class="confirm-card">
-        <span class="curve-type-tag">{{ p.curve_type }}</span>
-        <h3>{{ p.filename }}</h3>
-        <table class="preview-table">
-          <thead>
-            <tr>{% for c in range(p.n_cols) %}<th>col {{ c }}</th>{% endfor %}</tr>
-          </thead>
-          <tbody>
-            {% for row in p.preview_rows %}
-            <tr>{% for val in row %}<td>{{ "%.4g"|format(val) }}</td>{% endfor %}</tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        <div class="column-select-row">
-          <div>
-            <label for="soc_{{ p.file_id }}">SOC column</label>
-            <select class="select-control" id="soc_{{ p.file_id }}" name="soc_{{ p.file_id }}">
-              {% for c in range(p.n_cols) %}
-              <option value="{{ c }}" {% if c == p.guess_soc %}selected{% endif %}>col {{ c }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label for="ocv_{{ p.file_id }}">OCV column</label>
-            <select class="select-control" id="ocv_{{ p.file_id }}" name="ocv_{{ p.file_id }}">
-              {% for c in range(p.n_cols) %}
-              <option value="{{ c }}" {% if c == p.guess_ocv %}selected{% endif %}>col {{ c }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-      </div>
+      {% with key = p.file_id %}
+        {% include "_column_picker.html" %}
+      {% endwith %}
       {% endfor %}
     </div>
 

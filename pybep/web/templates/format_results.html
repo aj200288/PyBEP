@@ -1,19 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
-<main class="card" style="width: min(720px, 95vw);">
+<main class="card" style="width: min(720px, 100%);">
   <h1>Formatting complete</h1>
   <p>{{ report.successful|length }} of {{ report.successful|length + report.failed|length }}
-     {{ curve_type }} file(s) converted.</p>
+     {{ curve_type }} file(s) converted to the standard 1001-point layout.</p>
 
-  {% if have_zip %}
+  {% if report.successful %}
   <div class="results-header">
-    <span class="label">Formatted files</span>
-    <form method="GET" action="{{ url_for('main.format_download') }}">
-      <button class="download-btn" type="submit">Download zip</button>
+    <span class="download-label">Formatted files</span>
+    {% if report.successful|length > 1 %}
+    <form class="download-form" method="GET" action="{{ url_for('main.format_download') }}">
+      <button class="download-btn" type="submit">Download all ({{ report.successful|length }}) as zip</button>
     </form>
+    {% endif %}
   </div>
-  <ul class="file-list">
-    {% for name in report.successful %}<li>{{ name }}</li>{% endfor %}
+
+  {# One link each: unzipping a single text file to get at it is a poor
+     trade, and most batches here are small. #}
+  <ul class="download-list">
+    {% for name in report.successful %}
+    <li>
+      <span class="download-name">{{ name }}</span>
+      <a class="download-btn" href="{{ url_for('main.format_file', index=loop.index0) }}">Download</a>
+    </li>
+    {% endfor %}
   </ul>
   {% else %}
   <div class="banner banner-error">No files could be converted.</div>
@@ -21,7 +31,7 @@
 
   {% if report.warnings %}
   <div class="banner banner-warning">
-    <strong>Warnings:</strong>
+    <strong>Notes on your data:</strong>
     <ul>
       {% for fname, warns in report.warnings.items() %}
         {% for w in warns %}<li>{{ fname }}: {{ w }}</li>{% endfor %}

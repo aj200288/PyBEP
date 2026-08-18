@@ -20,7 +20,7 @@
 
     {# Each tab covers every route that belongs to it, so the highlight
        stays put through the confirm and results steps too. #}
-    {% set section = 'format' if request.endpoint in ('main.format_form', 'main.format_run')
+    {% set section = 'format' if request.endpoint.startswith('main.format')
                      else ('help' if request.endpoint == 'main.help_page' else 'run') %}
     <nav class="site-nav">
       <a href="{{ url_for('main.index') }}"

@@ -627,15 +627,16 @@ def list_data_files(folder_path):
                   if f.lower().endswith(DATA_FILE_EXTENSIONS))
 
 
-def format_files(file_paths, curve_type, output_folder, column_resolver=None):
+def format_files(file_paths, curve_type, output_folder, column_resolver=None,
+                 column_choices=None):
     """
     Run the "Format Data" conversion over a list of files: each one is
     parsed, cleaned and resampled to the project's standard 1001-point
     layout, then written to output_folder as `<name>_FORMATTED.txt`.
 
-    The SOC/OCV column mapping is confirmed once (on the first file that
-    needs it) and reused for the rest of the batch, since a batch is
-    typically one consistent export format.
+    Where the mapping is not given outright, it is confirmed once (on the
+    first file that needs it) and reused for the rest of the batch, since
+    a batch is typically one consistent export format.
 
     Parameters:
     - file_paths: list of paths to the input files.
@@ -643,6 +644,11 @@ def format_files(file_paths, curve_type, output_folder, column_resolver=None):
     - output_folder: directory to write the formatted files into (created
       if missing).
     - column_resolver: optional UI callback, see resolve_soc_ocv_columns.
+    - column_choices: optional {input path: (soc_idx, ocv_idx)} for files
+      whose mapping the caller already knows — the website confirms every
+      file in the browser before converting. A file listed here is never
+      guessed at, and never becomes the fallback for the rest of the
+      batch.
 
     Returns a report dict:
     - 'output_folder': where the files were written.
@@ -653,6 +659,7 @@ def format_files(file_paths, curve_type, output_folder, column_resolver=None):
       converted. One bad file does not abort the rest of the batch.
     """
     os.makedirs(output_folder, exist_ok=True)
+    column_choices = column_choices or {}
 
     successful = []
     warnings_by_file = {}
@@ -663,12 +670,13 @@ def format_files(file_paths, curve_type, output_folder, column_resolver=None):
         data_file = os.path.basename(input_path)
         name_without_ext = os.path.splitext(data_file)[0]
         output_filename = f"{name_without_ext}_FORMATTED.txt"
+        given = column_choices.get(input_path)
 
         try:
             x_final, y_final, warnings, used_columns = load_ocv_curve(
-                input_path, curve_type, column_choice=column_choice,
+                input_path, curve_type, column_choice=given or column_choice,
                 column_resolver=column_resolver)
-            if column_choice is None:
+            if column_choice is None and given is None:
                 column_choice = used_columns
             _write_curve_file(x_final, y_final,
                               os.path.join(output_folder, output_filename))

@@ -230,7 +230,9 @@ p { margin: 0 0 24px; color: var(--muted); }
 .prose ul, .prose ol { margin: 0 0 16px; padding-left: 22px; color: var(--muted); }
 .prose li { margin-bottom: 9px; line-height: 1.6; }
 .prose strong { color: var(--ink); font-weight: 650; }
-.prose a { color: var(--blue); }
+/* Not :not() for neatness — ".prose a" is specificity (0,1,1) and would
+   otherwise beat .primary/.secondary (0,1,0) and repaint button text. */
+.prose a:not(.link-button) { color: var(--blue); }
 
 .prose code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -773,6 +775,40 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 }
 .banner ul { margin: 6px 0 0; padding-left: 18px; }
 .banner li { margin-bottom: 2px; }
+
+/* One row per converted file, each with its own download. */
+.download-list {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.download-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--surface);
+}
+.download-list li + li { border-top: 1px solid var(--border); }
+.download-list li:nth-child(even) { background: var(--surface-sunk); }
+
+.download-name {
+  font-size: 0.84rem;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+/* The per-file buttons are anchors, so they need their own box. */
+a.download-btn {
+  flex: 0 0 auto;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
 
 .file-list {
   text-align: left;

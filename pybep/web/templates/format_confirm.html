@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="card" style="width: min(720px, 100%);">
+  <div class="page-head">
+    <h1>Confirm columns</h1>
+    <a class="help-dot" href="{{ url_for('main.help_page') }}#formatting"
+       target="_blank" rel="noopener"
+       title="Instructions (opens in a new tab)" aria-label="Instructions">?</a>
+  </div>
+  <p>
+    Check which column holds SOC and which holds voltage in each file. The
+    guess is pre-selected &mdash; the preview rows below it are there so you
+    can tell whether it is right.
+  </p>
+
+  {% if rejected %}
+  <div class="banner banner-error">
+    <strong>{{ rejected|length }} file(s) could not be read and were skipped:</strong>
+    <ul>
+      {% for name, why in rejected.items() %}<li>{{ name }}: {{ why }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('main.format_confirm') }}">
+    <div class="confirm-list">
+      {% for p in previews %}
+        {% with key = loop.index0 %}
+          {% include "_column_picker.html" %}
+        {% endwith %}
+      {% endfor %}
+    </div>
+
+    <div class="actions">
+      <button class="primary" type="submit">Format {{ previews|length }} file(s)</button>
+      <a class="secondary link-button" href="{{ url_for('main.format_form') }}">Start over</a>
+    </div>
+  </form>
+</main>
+{% endblock %}

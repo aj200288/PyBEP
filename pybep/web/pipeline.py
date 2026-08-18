@@ -223,43 +223,57 @@ def run_optimization(cathodes, anodes, battery_soc, battery_ocv, settings,
     }
 
 
-def format_uploads(file_storages, curve_type, workdir):
-    """
-    The website's version of the desktop app's "Format Data" button: save
-    the uploaded files, convert them all via core.format_files, and bundle
-    the results into a zip the browser can download.
+FORMATTED_DIR = 'formatted'
 
-    Returns (report, zip_path). zip_path is None when nothing converted.
-    """
-    input_dir = os.path.join(workdir, 'to_format')
-    os.makedirs(input_dir, exist_ok=True)
 
-    saved_paths = []
+def save_format_uploads(file_storages, curve_type, workdir):
+    """
+    Save the files submitted to Format Data and describe each one for the
+    column-confirmation step.
+
+    Returns (previews, rejected). Rejected maps a filename to why it could
+    not be read at all; one bad file never stops the rest.
+    """
+    previews = []
     rejected = {}
     for file_storage in file_storages:
         try:
-            _file_id, path = save_upload(file_storage, 'to_format', workdir)
-            saved_paths.append(path)
+            previews.append(save_and_preview(file_storage, curve_type, workdir))
         except DataFormatError as e:
             rejected[file_storage.filename] = str(e)
+        except Exception as e:
+            rejected[file_storage.filename] = f"Unexpected error: {e}"
+    return previews, rejected
 
-    output_folder = os.path.join(workdir, 'formatted')
-    report = format_files(saved_paths, curve_type, output_folder)
 
-    # save_upload prefixes stored names with a random id to keep uploads
-    # from colliding; strip it back off so the user gets their own names.
-    report['failed'].update(rejected)
+def convert_uploads(paths, curve_type, column_choices, workdir, rejected=None):
+    """
+    Convert already-saved uploads with the columns the user confirmed, and
+    bundle the output into a zip for people who want the lot in one go.
+
+    Returns (report, zip_path); zip_path is None when nothing converted.
+    Names in the report are the user's own, with save_upload's random
+    prefix stripped back off.
+    """
+    output_folder = os.path.join(workdir, FORMATTED_DIR)
+    report = format_files(paths, curve_type, output_folder,
+                          column_choices=column_choices)
+
+    report['failed'].update(rejected or {})
     report['failed'] = {original_name(k): v for k, v in report['failed'].items()}
     report['warnings'] = {original_name(k): v for k, v in report['warnings'].items()}
+    # Keep the stored names too: they are what is actually on disk, and
+    # the per-file download route needs them to find each file again.
+    report['stored'] = list(report['successful'])
+    report['successful'] = [original_name(n) for n in report['stored']]
 
-    if not report['successful']:
+    if not report['stored']:
         return report, None
 
     zip_path = os.path.join(workdir, 'formatted_data.zip')
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for name in report['successful']:
-            zf.write(os.path.join(output_folder, name), original_name(name))
-    report['successful'] = [original_name(n) for n in report['successful']]
+        for stored in report['stored']:
+            zf.write(os.path.join(output_folder, stored), original_name(stored))
     return report, zip_path
 
 

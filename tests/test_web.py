@@ -71,6 +71,16 @@ check("the nav marks the instructions tab as current",
       re.search(r'href="/help"\s+class="is-active"', help_page) is not None,
       re.findall(r'<a href="/\w*"[^>]*class="[^"]*"', help_page))
 
+
+def active_tab(html):
+    """Which nav tab the page marks as current."""
+    m = re.search(r'<a href="([^"]*)"\s+class="is-active"', html)
+    return m.group(1) if m else None
+
+
+check("the format tab stays lit through its own sub-pages",
+      active_tab(client.get("/format").get_data(as_text=True)) == "/format")
+
 # --- input clamping (the reason a public site needs a server-side cap) ---
 with app.test_request_context(
         "/upload", method="POST",
@@ -442,21 +452,82 @@ resp = client.post("/format", data={
     "data_files": [upload_file(cathode), upload_file(anode)],
     "curve_type": "cathode",
 }, content_type="multipart/form-data")
-check("format -> results page", resp.status_code == 200, resp.status_code)
-check("format page reports success",
-      "Formatting complete" in resp.get_data(as_text=True))
+check("format -> column confirmation", resp.status_code == 200, resp.status_code)
+fmt_page = resp.get_data(as_text=True)
+check("formatting asks which column is which, instead of guessing silently",
+      "Confirm columns" in fmt_page
+      and 'name="soc_0"' in fmt_page and 'name="soc_1"' in fmt_page,
+      [l.strip() for l in fmt_page.splitlines() if 'name="soc_' in l])
+check("each file gets its own preview rows to check the guess against",
+      fmt_page.count('class="preview-table"') == 2,
+      fmt_page.count('class="preview-table"'))
+check("the detected guess is pre-selected",
+      fmt_page.count("selected") >= 4, fmt_page.count("selected"))
+
+resp = client.post("/format/confirm", data={
+    "soc_0": "0", "ocv_0": "1", "soc_1": "0", "ocv_1": "1"})
+check("confirm -> results page", resp.status_code == 200, resp.status_code)
+done = resp.get_data(as_text=True)
+check("format page reports success", "Formatting complete" in done)
+
+# Each converted file is downloadable on its own.
+links = re.findall(r'href="(/format/file/\d+)"', done)
+check("every converted file has its own download link", len(links) == 2, links)
+single = client.get(links[0])
+check("a single formatted file downloads directly, not as a zip",
+      single.status_code == 200
+      and "zip" not in single.headers.get("Content-Type", ""),
+      (single.status_code, single.headers.get("Content-Type")))
+check("the download keeps the user's own filename",
+      "FORMATTED" in single.headers.get("Content-Disposition", "")
+      and not re.search(r"[0-9a-f]{32}_",
+                        single.headers.get("Content-Disposition", "")),
+      single.headers.get("Content-Disposition"))
+rows = single.get_data(as_text=True).strip().splitlines()
+check("the single file has 1001 rows of 'x<TAB>y'",
+      len(rows) == 1001 and len(rows[0].split("	")) == 2, len(rows))
+
+check("a file index outside this session's output 404s",
+      client.get("/format/file/99").status_code == 404)
 
 resp = client.get("/format/download")
-check("format zip downloads", resp.status_code == 200, resp.status_code)
+check("format zip still downloads for the whole batch",
+      resp.status_code == 200, resp.status_code)
 with zipfile.ZipFile(io.BytesIO(resp.get_data())) as zf:
     names = zf.namelist()
     check("zip holds both formatted files", len(names) == 2, names)
     check("zip entries use the original names (no uuid prefix)",
-          all(not n[:32].isalnum() or "_" in n[:40] for n in names) and
-          all("FORMATTED" in n for n in names), names)
+          not any(re.match(r"[0-9a-f]{32}_", n) for n in names)
+          and all("FORMATTED" in n for n in names), names)
     first = zf.read(names[0]).decode().strip().splitlines()
     check("formatted file has 1001 rows", len(first) == 1001, len(first))
-    check("formatted rows are 'x<TAB>y'", len(first[0].split("\t")) == 2, first[0])
+    check("formatted rows are 'x<TAB>y'", len(first[0].split("	")) == 2, first[0])
+
+# The columns the user picked must actually be used, not re-guessed.
+swapped = client.post("/format", data={
+    "data_files": [upload_file(cathode)],
+    "curve_type": "cathode",
+}, content_type="multipart/form-data")
+check("single-file batch also asks first",
+      'name="soc_0"' in swapped.get_data(as_text=True))
+resp = client.post("/format/confirm", data={"soc_0": "1", "ocv_0": "0"})
+body = resp.get_data(as_text=True)
+link = re.search(r'href="(/format/file/\d+)"', body)
+check("a deliberately swapped choice is honoured, not overridden",
+      link is not None, [l for l in body.splitlines() if "banner" in l][:3])
+if link:
+    swapped_rows = client.get(link.group(1)).get_data(as_text=True).strip().splitlines()
+    normal_first = rows[0].split("	")
+    swapped_first = swapped_rows[0].split("	")
+    check("swapping SOC/OCV really produces different numbers",
+          swapped_first != normal_first, (normal_first, swapped_first))
+
+check("only one file offered, so no zip button is shown",
+      "as zip" not in body, [l for l in body.splitlines() if "zip" in l])
+check("the format tab is still lit on the confirm and results pages",
+      active_tab(body) == "/format"
+      and active_tab(swapped.get_data(as_text=True)) == "/format",
+      (active_tab(body), active_tab(swapped.get_data(as_text=True))))
 
 # --- rejects bad input ------------------------------------------------
 resp = client.post("/format", data={

@@ -402,18 +402,86 @@ def format_run():
     workdir = pipeline.create_session_workdir(session.get('workdir'))
     session['workdir'] = workdir
     # A format run invalidates any earlier optimization in this session.
-    session.pop('files', None)
-    session.pop('settings', None)
+    for key in ('files', 'settings', 'choices', 'library', 'battery_choice'):
+        session.pop(key, None)
 
     try:
-        report, zip_path = pipeline.format_uploads(files, curve_type, workdir)
+        previews, rejected = pipeline.save_format_uploads(files, curve_type, workdir)
+    except Exception as e:
+        flash(f"Formatting failed: {e}", "error")
+        return redirect(url_for('main.format_form'))
+
+    if not previews:
+        flash("None of the uploaded files could be read: "
+              + "; ".join(f"{name} ({why})" for name, why in rejected.items()),
+              "error")
+        return redirect(url_for('main.format_form'))
+
+    # Only the stored basenames go in the session; the workdir is already
+    # there, and full paths would bloat the cookie for a large batch.
+    session['format'] = {
+        'curve_type': curve_type,
+        'stored': [os.path.basename(p['path']) for p in previews],
+        'rejected': rejected,
+    }
+    return render_template('format_confirm.html', previews=previews,
+                           curve_type=curve_type, rejected=rejected)
+
+
+@bp.route('/format/confirm', methods=['POST'])
+def format_confirm():
+    state = session.get('format')
+    workdir = session.get('workdir')
+
+    if not state or not workdir or not os.path.isdir(workdir):
+        flash("Your session expired, please choose the files again.", "error")
+        return redirect(url_for('main.format_form'))
+
+    curve_type = state['curve_type']
+    paths = [os.path.join(workdir, curve_type, name) for name in state['stored']]
+
+    choices = {}
+    for i, path in enumerate(paths):
+        try:
+            choices[path] = (int(request.form[f'soc_{i}']),
+                             int(request.form[f'ocv_{i}']))
+        except (KeyError, ValueError):
+            continue  # left unconfirmed; format_files falls back to a guess
+
+    try:
+        report, zip_path = pipeline.convert_uploads(
+            paths, curve_type, choices, workdir, rejected=state['rejected'])
     except Exception as e:
         flash(f"Formatting failed: {e}", "error")
         return redirect(url_for('main.format_form'))
 
     session['format_zip'] = zip_path
+    session['format_outputs'] = report['stored']
     return render_template('format_results.html', report=report,
                            curve_type=curve_type, have_zip=zip_path is not None)
+
+
+@bp.route('/format/file/<int:index>')
+def format_file(index):
+    """
+    One converted file on its own — most batches are small, and asking
+    someone to unzip a single text file is a poor trade.
+
+    The file is identified by its position in the list this session just
+    produced, so a URL can only ever reach that session's own output.
+    """
+    outputs = session.get('format_outputs') or []
+    workdir = session.get('workdir')
+    if not workdir or not 0 <= index < len(outputs):
+        abort(404)
+
+    stored = outputs[index]
+    path = os.path.join(workdir, pipeline.FORMATTED_DIR, stored)
+    if not os.path.exists(path):
+        abort(404)
+    return send_file(path, as_attachment=True,
+                     download_name=pipeline.original_name(stored),
+                     mimetype='text/plain')
 
 
 @bp.route('/format/download')

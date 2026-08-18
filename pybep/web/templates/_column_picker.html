@@ -1,0 +1,43 @@
+{#
+  One uploaded file's SOC/OCV column chooser: a peek at the first rows,
+  then two selects with the auto-detected guess pre-selected.
+
+  Shared by the optimization and format-data flows so the two cannot
+  drift apart. Expects:
+    p   - a preview dict from pipeline.save_and_preview
+    key - what to suffix the field names with, unique within the form
+#}
+<div class="confirm-card">
+  <span class="curve-type-tag">{{ p.curve_type }}</span>
+  <h3>{{ p.filename }}</h3>
+
+  <table class="preview-table">
+    <thead>
+      <tr>{% for c in range(p.n_cols) %}<th>col {{ c }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for row in p.preview_rows %}
+      <tr>{% for val in row %}<td>{{ "%.4g"|format(val) }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="column-select-row">
+    <div>
+      <label for="soc_{{ key }}">SOC column</label>
+      <select class="select-control" id="soc_{{ key }}" name="soc_{{ key }}">
+        {% for c in range(p.n_cols) %}
+        <option value="{{ c }}" {% if c == p.guess_soc %}selected{% endif %}>col {{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="ocv_{{ key }}">OCV column</label>
+      <select class="select-control" id="ocv_{{ key }}" name="ocv_{{ key }}">
+        {% for c in range(p.n_cols) %}
+        <option value="{{ c }}" {% if c == p.guess_ocv %}selected{% endif %}>col {{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</div>

@@ -217,8 +217,9 @@ would rather not install Python:
   ticked by default, each with a preview of its curve, so the battery file is
   usually the only upload needed. You can still add your own candidates for a
   curve that isn't in the list.
-* **Format data** — upload raw files, choose the curve type, and download the
-  formatted 1001-point set as a zip.
+* **Format data** — upload raw files, choose the curve type, confirm the
+  SOC/OCV columns for each one, and download the formatted 1001-point files
+  individually or as a zip.
 
 The download format is chosen from a dropdown next to the download button. All
 three describe the same run: the JSON is written once when the optimization
