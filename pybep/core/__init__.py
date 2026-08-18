@@ -34,10 +34,25 @@ from .data_formatter import (
 )
 from .add_curves import add_half_cell_data, build_curve_entry
 from .add_battery import load_soc_ocv_data
+from .library import (
+    library_curves,
+    library_names,
+    select_library_curves,
+    library_curve_points,
+    battery_library_names,
+    load_battery_library_curve,
+)
 from .optimization_functions import (
     perform_full_optimization_parallel,
     save_optimization_result_to_json,
     perform_full_optimization_parallel_to_json,
+)
+from .result_export import (
+    RESULT_FORMATS,
+    RESULT_MEDIA_TYPES,
+    result_summary,
+    result_curves,
+    write_result_as,
 )
 
 __all__ = [
@@ -53,7 +68,18 @@ __all__ = [
     "add_half_cell_data",
     "build_curve_entry",
     "load_soc_ocv_data",
+    "library_curves",
+    "library_names",
+    "select_library_curves",
+    "library_curve_points",
+    "battery_library_names",
+    "load_battery_library_curve",
     "perform_full_optimization_parallel",
     "save_optimization_result_to_json",
     "perform_full_optimization_parallel_to_json",
+    "RESULT_FORMATS",
+    "RESULT_MEDIA_TYPES",
+    "result_summary",
+    "result_curves",
+    "write_result_as",
 ]

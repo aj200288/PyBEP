@@ -2,7 +2,11 @@
 {% block content %}
 <main class="card" style="width: min(720px, 95vw);">
   <h1>Confirm columns</h1>
-  <p>Confirm which column is SOC and which is OCV for each file (auto-detected guess is pre-selected).</p>
+  <p>
+    Confirm which column is SOC and which is OCV for each file you uploaded
+    (the auto-detected guess is pre-selected). Built-in reference curves are
+    already checked and aren't listed here.
+  </p>
 
   {% if errors %}
   <div class="banner banner-error">

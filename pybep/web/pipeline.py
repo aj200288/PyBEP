@@ -12,6 +12,7 @@ on a server, and the default backend would try to open a window.
 """
 import base64
 import io
+import json
 import os
 import shutil
 import tempfile
@@ -29,12 +30,15 @@ from ..core import (
     load_ocv_curve,
     build_curve_entry,
     format_files,
+    library_curve_points,
     perform_full_optimization_parallel,
     save_optimization_result_to_json,
+    write_result_as,
     DATA_FILE_EXTENSIONS,
 )
 
 PREVIEW_ROWS = 5
+CURVE_PREVIEW_SIZE = (5, 3)
 
 
 def allowed_file(filename):
@@ -139,6 +143,70 @@ def render_result_plot(battery_soc, battery_ocv, result):
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
+def render_curve_preview(curve_type, name):
+    """
+    A small PNG of one library curve, so a user can see what a candidate
+    looks like before deciding whether to include it.
+
+    Returns None when the name isn't in the library, which the route turns
+    into a 404 rather than trusting the name enough to touch the disk.
+    """
+    points = library_curve_points(curve_type, name)
+    if points is None:
+        return None
+    x, y = points
+
+    fig, ax = plt.subplots(figsize=CURVE_PREVIEW_SIZE)
+    ax.plot(x, y, '-', color='#1f6feb')
+    ax.set_title(name, fontsize=9)
+    ax.set_xlabel('SOC (% / 100)', fontsize=8)
+    ax.set_ylabel('OCP (V)', fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.grid(True, alpha=.3)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=110, bbox_inches='tight')
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def result_download_path(workdir, fmt):
+    """
+    Path to the result file in the requested format, converting it from
+    the stored JSON the first time that format is asked for.
+
+    The JSON is written once when the optimization runs and is the source
+    for the others, so switching format in the browser never re-runs the
+    optimization and never gives two formats that disagree.
+
+    Returns None if this session has no result to download.
+    """
+    source = os.path.join(workdir, 'result.json')
+    if not os.path.exists(source):
+        return None
+    if fmt == 'json':
+        return source
+
+    target = os.path.join(workdir, f'result.{fmt}')
+    if not os.path.exists(target):
+        with open(source, encoding='utf-8') as f:
+            write_result_as(json.load(f), target, fmt)
+    return target
+
+
+def discard_uploads(workdir):
+    """
+    Delete the uploaded curve files once they have been parsed.
+
+    Uploads are for one run only — they never join the library in data/ —
+    so there is no reason to keep the raw files around after the numbers
+    have been read out of them. result.json stays, since /download serves
+    it.
+    """
+    for curve_type in ('cathode', 'anode', 'battery'):
+        shutil.rmtree(os.path.join(workdir, curve_type), ignore_errors=True)
+
+
 def run_optimization(cathodes, anodes, battery_soc, battery_ocv, settings,
                      workdir, n_jobs):
     """
@@ -194,8 +262,8 @@ def format_uploads(file_storages, curve_type, workdir):
     # save_upload prefixes stored names with a random id to keep uploads
     # from colliding; strip it back off so the user gets their own names.
     report['failed'].update(rejected)
-    report['failed'] = {_original_name(k): v for k, v in report['failed'].items()}
-    report['warnings'] = {_original_name(k): v for k, v in report['warnings'].items()}
+    report['failed'] = {original_name(k): v for k, v in report['failed'].items()}
+    report['warnings'] = {original_name(k): v for k, v in report['warnings'].items()}
 
     if not report['successful']:
         return report, None
@@ -203,12 +271,12 @@ def format_uploads(file_storages, curve_type, workdir):
     zip_path = os.path.join(workdir, 'formatted_data.zip')
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         for name in report['successful']:
-            zf.write(os.path.join(output_folder, name), _original_name(name))
-    report['successful'] = [_original_name(n) for n in report['successful']]
+            zf.write(os.path.join(output_folder, name), original_name(name))
+    report['successful'] = [original_name(n) for n in report['successful']]
     return report, zip_path
 
 
-def _original_name(stored_name):
+def original_name(stored_name):
     """Strip the uuid4 hex prefix that save_upload adds to stored files."""
     prefix, sep, rest = stored_name.partition('_')
     if sep and len(prefix) == 32:
@@ -218,3 +286,16 @@ def _original_name(stored_name):
             return stored_name
         return rest
     return stored_name
+
+
+def curve_label(stored_path):
+    """
+    The name to show a user for one uploaded curve: their own filename,
+    without save_upload's uuid prefix and without the extension.
+
+    This label becomes the dictionary key handed to the optimizer, which
+    reports it straight back as "Best Cathode/Anode Data ID". Deriving it
+    here keeps that ID identical to the desktop app's, which uses the plain
+    filename stem (see core.add_curves.add_half_cell_data).
+    """
+    return os.path.splitext(original_name(os.path.basename(stored_path)))[0]

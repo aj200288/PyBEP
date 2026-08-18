@@ -2,7 +2,7 @@
 {% block content %}
 <main class="card">
   <h1>PyBEP</h1>
-  <p>Upload your cathode/anode candidate curves and battery OCV data, then configure the optimization.</p>
+  <p>Upload your battery OCV curve and pick which reference electrodes to compare it against.</p>
 
   {% with messages = get_flashed_messages(category_filter=["error"]) %}
     {% if messages %}
@@ -14,22 +14,74 @@
 
   <form class="fields" method="POST" action="{{ url_for('main.upload') }}" enctype="multipart/form-data">
     <div class="file-group">
-      <label for="cathode_files">Cathode candidate files</label>
-      <input id="cathode_files" class="input-file" type="file" name="cathode_files" multiple required
-             accept=".txt,.csv,.xlsx"/>
-      <span class="file-hint">Select all candidate cathode OCP files at once (.txt / .csv / .xlsx), up to {{ max_files }}.</span>
+      <label for="battery_choice">Battery OCV curve</label>
+      <select class="select-control" id="battery_choice" name="battery_choice"
+              onchange="toggleBatteryUpload()">
+        <option value="">Upload my own file…</option>
+        {% for name in battery_library %}
+        <option value="{{ name }}">{{ name }}</option>
+        {% endfor %}
+      </select>
+      <div id="battery-upload">
+        <input id="battery_file" class="input-file" type="file" name="battery_file" required
+               accept=".txt,.csv,.xlsx"/>
+        <span class="file-hint">The measured full-cell curve you want decomposed (.txt / .csv / .xlsx).</span>
+      </div>
     </div>
-    <div class="file-group">
-      <label for="anode_files">Anode candidate files</label>
-      <input id="anode_files" class="input-file" type="file" name="anode_files" multiple required
-             accept=".txt,.csv,.xlsx"/>
-      <span class="file-hint">Select all candidate anode OCP files at once (.txt / .csv / .xlsx), up to {{ max_files }}.</span>
+
+    {% macro candidate_group(kind, names, field, upload_field, label) %}
+    <div class="candidate-group">
+      {# Collapsed by default: all of them are already selected, so the count
+         in the summary is all you need unless you want to change something. #}
+      <details class="candidate-panel">
+        <summary class="candidate-summary">
+          <span class="candidate-title">{{ label }}</span>
+          <span class="candidate-badge" data-count-for="{{ field }}">
+            {{ names|length }} of {{ names|length }} selected
+          </span>
+        </summary>
+
+        <div class="candidate-actions">
+          <button type="button" class="mini" onclick="setAll('{{ field }}', true)">All</button>
+          <button type="button" class="mini" onclick="setAll('{{ field }}', false)">None</button>
+        </div>
+
+        <div class="candidate-list">
+          {% for name in names %}
+          <div class="candidate-item">
+            <label class="candidate-row">
+              <input type="checkbox" name="{{ field }}" value="{{ name }}" checked/>
+              <span class="candidate-name">{{ name }}</span>
+            </label>
+            <details class="curve-peek">
+              <summary>view curve</summary>
+              <img loading="lazy" alt="{{ name }}"
+                   src="{{ url_for('main.curve_preview', curve_type=kind, name=name) }}"/>
+            </details>
+          </div>
+          {% endfor %}
+        </div>
+
+        <span class="file-hint">
+          These {{ names|length }} reference curves are built in and ready to use —
+          untick any you don't want compared.
+        </span>
+      </details>
+
+      <details class="extra-upload">
+        <summary>Add your own {{ kind }} files</summary>
+        <input class="input-file" type="file" name="{{ upload_field }}" multiple
+               accept=".txt,.csv,.xlsx"/>
+        <span class="file-hint">
+          Only needed for a curve that isn't in the list above. Uploaded files are
+          used for this run only — they are not added to the list.
+        </span>
+      </details>
     </div>
-    <div class="file-group">
-      <label for="battery_file">Battery OCV file</label>
-      <input id="battery_file" class="input-file" type="file" name="battery_file" required
-             accept=".txt,.csv,.xlsx"/>
-    </div>
+    {% endmacro %}
+
+    {{ candidate_group('cathode', cathode_library, 'library_cathodes', 'cathode_files', 'Cathode candidates') }}
+    {{ candidate_group('anode', anode_library, 'library_anodes', 'anode_files', 'Anode candidates') }}
 
     <div class="slider-group">
       <label for="slider-iterations">Iterations (1&ndash;{{ max_iterations }})</label>
@@ -77,6 +129,46 @@
     }
     syncSliderLabels();
   }
+
+  // The file picker only appears for "Upload my own file". Its `required`
+  // has to come off with it — a hidden required input blocks submission
+  // with a validation message the browser can't show anywhere.
+  function toggleBatteryUpload() {
+    const own = document.getElementById('battery_choice').value === '';
+    const box = document.getElementById('battery-upload');
+    const input = document.getElementById('battery_file');
+    box.hidden = !own;
+    input.required = own;
+    if (!own) input.value = '';
+  }
+  toggleBatteryUpload();
+
+  // The candidate panels start closed, so the count in the summary is the
+  // only sign of what is selected - it has to stay accurate.
+  const CANDIDATE_FIELDS = ['library_cathodes', 'library_anodes'];
+
+  function updateCount(field) {
+    const boxes = document.querySelectorAll(`input[name="${field}"]`);
+    const chosen = [...boxes].filter(box => box.checked).length;
+    const badge = document.querySelector(`[data-count-for="${field}"]`);
+    badge.textContent = `${chosen} of ${boxes.length} selected`;
+    // Selecting none is rejected on submit; say so while the panel is shut.
+    badge.classList.toggle('candidate-badge-empty', chosen === 0);
+  }
+
+  // With seven cathodes built in, narrowing to one candidate would
+  // otherwise mean unticking six boxes by hand.
+  function setAll(field, checked) {
+    document.querySelectorAll(`input[name="${field}"]`)
+            .forEach(box => { box.checked = checked; });
+    updateCount(field);
+  }
+
+  CANDIDATE_FIELDS.forEach(field => {
+    document.querySelectorAll(`input[name="${field}"]`)
+            .forEach(box => box.addEventListener('change', () => updateCount(field)));
+    updateCount(field);
+  });
 
   function syncSliderLabels() {
     aValue.textContent = parseFloat(sliderA.value).toFixed(2);

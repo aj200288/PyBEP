@@ -244,3 +244,6 @@ $RECYCLE.BIN/
 
 # uv lockfile (no dependencies declared in pyproject.toml; see requirements.txt)
 uv.lock
+
+# Scratch screenshots used when reporting UI problems
+debug_images/

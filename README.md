@@ -211,11 +211,34 @@ Each file contains **1001 points**.
 The website offers the same two features as the desktop app, for people who
 would rather not install Python:
 
-* **Run optimization** — upload cathode candidates, anode candidates and a
-  battery OCV file, confirm the detected SOC/OCV columns, and get the plot,
-  the best cathode/anode/parameters/RMSD, and the result JSON.
+* **Run optimization** — upload a battery OCV file and get the plot, the best
+  cathode/anode/parameters/RMSD, and the result as JSON, CSV or Excel. The reference electrodes
+  in `data/cathode_data` and `data/anode_data` are offered ready to use and
+  ticked by default, each with a preview of its curve, so the battery file is
+  usually the only upload needed. You can still add your own candidates for a
+  curve that isn't in the list.
 * **Format data** — upload raw files, choose the curve type, and download the
   formatted 1001-point set as a zip.
+
+The download format is chosen from a dropdown next to the download button. All
+three describe the same run: the JSON is written once when the optimization
+finishes, and CSV/XLSX are converted from it on request. The curves are not all
+the same length (the "full" cathode and anode curves run past the fitted
+window), so the table formats pad the short columns rather than truncating.
+
+* **JSON** — everything, at full precision.
+* **CSV** — one table of the curves, with the summary as leading `#` comment
+  lines. Read it back with `pandas.read_csv(path, comment='#')`.
+* **XLSX** — a `Summary` sheet and a `Curves` sheet. Note that Excel stores
+  about 15 significant digits, so the RMSD loses its last digit or two; use
+  JSON if you need it exact.
+
+Only uploaded files go through the SOC/OCV column-confirmation step. The
+bundled reference curves have a known, hand-checked layout, so they are loaded
+directly (parsed once per process and cached). Uploads are never written into
+`data/` — they live in a temporary directory and are deleted once the
+optimization has read them, so using the site cannot change what the next
+visitor sees.
 
 Run it locally with `python -m pybep.web`. For a real deployment, serve the same
 app factory with a production server rather than Flask's development one:
@@ -228,8 +251,11 @@ gunicorn 'pybep.web:create_app()' -b 0.0.0.0:8000        # Linux hosts
 Set `SECRET_KEY` in the environment (it signs the session cookie). A few
 limits in `web/__init__.py` exist because the optimization is expensive and
 the site is public — work grows as *cathodes × anodes × iterations*, so
-iterations are capped at 5, batches at 12 files per electrode, and uploads at
-32 MB. Raise them only alongside a real job queue or request timeout.
+iterations are capped at 5, candidates at 12 per electrode (library plus
+uploads), and uploads at 32 MB. For scale: the full built-in library is 7 × 2 =
+14 combinations, which takes roughly 7 s at 1 iteration and 34 s at 5 with
+`PYBEP_N_JOBS=2`. Raise the caps only alongside a real job queue or request
+timeout.
 `PYBEP_N_JOBS` controls how many worker processes the optimization uses
 (default 2; small hosts report more CPUs than they actually give you).
 

@@ -15,8 +15,14 @@
   <div class="results-card">
     <div class="results-header">
       <h2>Results</h2>
-      <form method="GET" action="{{ url_for('main.download') }}">
-        <button class="download-btn" type="submit">Download results JSON</button>
+      <form class="download-form" method="GET" action="{{ url_for('main.download') }}">
+        <label class="download-label" for="download-format">Select file type</label>
+        <select class="select-control download-format" id="download-format" name="format">
+          <option value="json">JSON</option>
+          <option value="csv">CSV</option>
+          <option value="xlsx">Excel (.xlsx)</option>
+        </select>
+        <button class="download-btn" type="submit">Download results</button>
       </form>
     </div>
     <div class="result-item">
@@ -34,6 +40,10 @@
     <div class="result-item">
       <span class="label">Lowest RMSD:</span>
       <span class="value">{{ "%.6f"|format(lowest_rmsd) }}</span>
+    </div>
+    <div class="result-item">
+      <span class="label">Candidates compared:</span>
+      <span class="value">{{ n_cathodes }} cathode(s) &times; {{ n_anodes }} anode(s)</span>
     </div>
     <div class="result-item">
       <span class="label">Settings used:</span>
