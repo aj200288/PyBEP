@@ -4,77 +4,66 @@
 <main class="card card-wide prose">
   <h1>Instructions</h1>
   <p>
-    PyBEP takes a measured full-cell OCV curve and works out which cathode and
-    which anode, combined and scaled how, reproduce it most closely.
+    PyBEP works backwards from a full cell. Give it the OCV curve you measured
+    on a complete battery and it finds the cathode and the anode whose own
+    curves, used over the right portion of each, add up to what you measured.
+  </p>
+  <p>
+    You get back the identity of both electrodes, how much of each the cell
+    actually uses, a graph of the reconstruction against your measurement, and
+    the numbers behind it. There is a second tool, <em>Format data</em>, that
+    only cleans and standardises files without decomposing anything.
   </p>
 
   <nav class="toc">
-    <a href="#files">Data files</a>
+    <a href="#quickstart">Try it with no data</a>
     <a href="#optimization">Running an optimization</a>
     <a href="#results">Reading the results</a>
+    <a href="#files">Preparing your own files</a>
     <a href="#formatting">Formatting data</a>
-    <a href="#limits">Limits</a>
+    <a href="#limits">Limits and privacy</a>
   </nav>
 
-  <h2 id="files">Data files</h2>
+  <h2 id="quickstart">Try it with no data</h2>
   <p>
-    Every curve, whatever it describes, is just two columns of numbers: state
-    of charge and voltage. Files may be <code>.txt</code>, <code>.csv</code> or
-    <code>.xlsx</code>, up to {{ max_upload_mb }} MB.
+    Everything needed for a complete run is already here, so you can see what
+    PyBEP produces before preparing anything of your own.
   </p>
-  <ul>
+  <ol>
+    <li>Open <a href="{{ url_for('main.index') }}">Run optimization</a>.</li>
     <li>
-      <strong>Two numeric columns at least.</strong> One holds SOC, the other
-      voltage. If the file has more, you pick which is which after uploading.
+      Under <strong>Battery OCV curve</strong>, choose one of the
+      {{ battery_library|length }} bundled measurements instead of
+      &ldquo;Upload my own file&rdquo;.
     </li>
-    <li>
-      <strong>The separator is detected for you</strong> &mdash; commas,
-      semicolons, tabs or spaces &mdash; as is the decimal mark, so
-      <code>0,85</code> and <code>0.85</code> both work.
-    </li>
-    <li>
-      <strong>Headers and footers are ignored.</strong> Lines of text above or
-      below the numbers are stripped automatically. Text <em>in the middle</em>
-      of the numbers is rejected, because at that point there is no way to tell
-      a stray label from corrupted data.
-    </li>
-    <li>
-      <strong>SOC may be 0&ndash;1 or 0&ndash;100.</strong> Anything reaching
-      past 1.5 is read as a percentage and divided by 100.
-    </li>
-    <li>
-      <strong>Order does not matter.</strong> Curves that run backwards, or
-      wander out of order, are sorted and flagged. Repeated SOC values are
-      nudged apart.
-    </li>
-    <li><strong>At least four rows of data.</strong></li>
-  </ul>
+    <li>Press <strong>Continue</strong>.</li>
+  </ol>
   <p>
-    Every curve is finally resampled onto a common grid of 1001 points, which
-    is what makes different sources comparable.
-  </p>
-  <p class="note">
-    Anything unusual in your file produces a note above the results rather than
-    a silent correction &mdash; read those notes; they are the difference
-    between a fit and a coincidence.
+    Nothing else needs touching: all {{ cathode_library|length }} cathodes and
+    {{ anode_library|length }} anodes are selected already, and because you
+    uploaded nothing there are no columns to confirm, so the results appear
+    straight away. Then swap in your own measurement and keep everything else
+    the same.
   </p>
 
   <h2 id="optimization">Running an optimization</h2>
   <ol>
     <li>
       <strong>Choose the battery OCV curve.</strong> This is your measurement:
-      the full-cell curve to be decomposed. Pick one of the
-      {{ battery_library|length }} bundled examples to try the tool out, or
-      upload your own.
+      the full-cell curve to be decomposed. Upload it, or pick one of the
+      bundled examples.
     </li>
     <li>
       <strong>Check the candidates.</strong>
       {{ cathode_library|length }} reference cathodes and
       {{ anode_library|length }} reference anodes are built in and all selected
       by default, so you can usually leave this alone. Open a panel to see the
-      list, preview any curve, or untick ones that cannot apply to your cell.
-      Fewer candidates means a faster run. You can add your own files for a
-      material that is not in the list; those are used for that run only and
+      list, preview any curve, or untick materials that cannot apply to your
+      cell &mdash; fewer candidates means a faster run. Their names are the
+      material followed by the DOI of the paper the curve came from, with
+      <code>/</code> written as <code>_</code>; ones ending in
+      <code>-LICeM</code> were measured in-house. You can add your own files
+      for a material that is not listed; those are used for that run only and
       are not added to the shared list.
     </li>
     <li>
@@ -93,12 +82,18 @@
       material; add derivative weight to make the peaks matter.
     </li>
     <li>
-      <strong>Confirm the columns.</strong> Only for files you uploaded: PyBEP
-      shows the first few rows with its guess pre-selected, and you correct it
-      if the guess is wrong. Built-in curves skip this step because their layout
-      is already known.
+      <strong>Confirm the columns.</strong> This step appears only for files you
+      uploaded. PyBEP shows the first few rows of each with its guess
+      pre-selected, so you can see whether the guess is right before committing
+      to it. Built-in curves skip it because their layout is already known.
     </li>
   </ol>
+  <p class="note">
+    Comparing the whole built-in set is
+    {{ cathode_library|length * anode_library|length }} electrode pairs: a few
+    seconds at one iteration, up to about a minute at five, depending on how
+    busy the server is. Leave the tab open while it runs.
+  </p>
 
   <h2 id="results">Reading the results</h2>
   <p>
@@ -112,17 +107,29 @@
 
     <dt>Best parameters</dt>
     <dd>
-      The four indices marking where each electrode curve was cut and stretched
-      to line up with the cell.
+      Where each electrode curve was cut, as
+      <em>(anode start, anode end, cathode start, cathode end)</em> in points
+      out of 1001. They say how much of each electrode the cell is using: a
+      real cell never cycles either electrode over its full range, and these
+      are the fitted limits. The anode may be trimmed by up to 30&nbsp;% at
+      each end, the cathode by up to 15&nbsp;%.
     </dd>
 
     <dt>Lowest RMSD</dt>
     <dd>
-      Root-mean-square deviation between measurement and reconstruction, in
-      volts &mdash; lower is better. It is only comparable between runs using
-      the same weights, since changing them changes what is being minimised.
+      How far the reconstruction sits from your measurement &mdash; lower is
+      better. At a battery weight of 1 it is a root-mean-square voltage error
+      in volts. Any derivative weight adds a second term measured in different
+      units, so it becomes a score rather than a voltage, and is only
+      comparable between runs that used the same weights.
     </dd>
   </dl>
+  <p class="note">
+    Anything unusual about your file &mdash; SOC read as a percentage, points
+    reordered, values out of range &mdash; is reported in a note above the
+    results rather than corrected silently. Read those notes; they are the
+    difference between a fit and a coincidence.
+  </p>
   <p>
     <strong>A winner is always reported</strong>, even when nothing fits well.
     The RMSD, and your own eye on the graph, are what tell you whether the
@@ -135,6 +142,63 @@
     JSON if the last digits matter. <strong>Adjust settings and re-run</strong>
     keeps the same curves and only changes the settings &mdash; the quick way to
     see how sensitive a result is to the weights.
+  </p>
+  <p class="note">
+    Download before you start another run. Each new run replaces the previous
+    one, and the earlier result cannot be retrieved afterwards.
+  </p>
+
+  <h2 id="files">Preparing your own files</h2>
+  <p>
+    Every curve, whatever it describes, is just two columns of numbers: state
+    of charge and voltage. Files may be <code>.txt</code>, <code>.csv</code> or
+    <code>.xlsx</code>, up to {{ max_upload_mb }} MB.
+  </p>
+  <ul>
+    <li>
+      <strong>Two numeric columns at least.</strong> One holds SOC, the other
+      voltage. Extra columns are fine &mdash; a row index or a timestamp in
+      front of the data is normal, and you say which columns matter after
+      uploading.
+    </li>
+    <li>
+      <strong>The separator is detected for you</strong> &mdash; commas,
+      semicolons, tabs or spaces &mdash; as is the decimal mark, so
+      <code>0,85</code> and <code>0.85</code> both work.
+    </li>
+    <li>
+      <strong>Headers and footers are ignored.</strong> Lines of text above or
+      below the numbers are stripped automatically.
+    </li>
+    <li>
+      <strong>SOC may be 0&ndash;1 or 0&ndash;100.</strong> Anything reaching
+      past 1.5 is read as a percentage and divided by 100.
+    </li>
+    <li>
+      <strong>Order does not matter.</strong> Curves that run backwards, or
+      wander out of order, are sorted and flagged. Repeated SOC values are
+      nudged apart.
+    </li>
+    <li><strong>At least four rows of data.</strong></li>
+  </ul>
+  <p>
+    Every curve is finally resampled onto a common grid of 1001 points, which
+    is what makes different sources comparable.
+  </p>
+  <p>
+    <strong>If a file is rejected</strong>, the message says why. The one
+    problem PyBEP will not work around is text sitting <em>between</em> rows of
+    numbers &mdash; an error line logged mid-measurement, say &mdash; because
+    at that point there is no way to tell a stray label from corrupted data.
+    Delete the offending line and try again.
+  </p>
+  <p>
+    Naming is free-form, but the built-in curves follow the project convention,
+    and matching it keeps a collection readable:
+    <code>Material-DOI</code> for a half cell (<code>NMC811-10.1016_j.xcrp.2020.100253</code>),
+    <code>CathodevsAnode_OCV-DOI</code> for a full cell, and <code>-LICeM</code>
+    in place of the DOI for in-house measurements. Write <code>/</code> in a DOI
+    as <code>_</code>.
   </p>
 
   <h2 id="formatting">Formatting data</h2>
@@ -156,7 +220,7 @@
     zip.
   </p>
 
-  <h2 id="limits">Limits</h2>
+  <h2 id="limits">Limits and privacy</h2>
   <p>
     The optimization compares every cathode against every anode, so the work
     grows as cathodes &times; anodes &times; iterations. To keep the site

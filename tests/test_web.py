@@ -50,9 +50,19 @@ help_page = resp.get_data(as_text=True)
 check("instructions page renders", resp.status_code == 200, resp.status_code)
 
 import re  # noqa: E402
-anchors = set(re.findall(r'<h2 id="([\w-]+)"', help_page))
+section_order = re.findall(r'<h2 id="([\w-]+)"', help_page)
+anchors = set(section_order)
 check("the contents list points only at sections that exist",
       set(re.findall(r'<a href="#([\w-]+)"', help_page)) == anchors, anchors)
+
+# Ordered for someone arriving for the first time: try it, then run it
+# properly, then read the answer. Reference material comes after all that.
+check("the instructions lead with doing, not with file rules",
+      section_order == ["quickstart", "optimization", "results",
+                        "files", "formatting", "limits"], section_order)
+check("the contents list runs in the same order as the page",
+      re.findall(r'<a href="#([\w-]+)"', help_page) == section_order,
+      re.findall(r'<a href="#([\w-]+)"', help_page))
 
 for page, path in (("front", "/"), ("format", "/format")):
     body = client.get(path).get_data(as_text=True)
