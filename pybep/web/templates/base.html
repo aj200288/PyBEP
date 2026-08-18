@@ -18,14 +18,17 @@
       </span>
     </a>
 
-    {# The two format routes are the same destination as far as the nav is
-       concerned, so both light up the "Format data" tab. #}
-    {% set formatting = request.endpoint in ('main.format_form', 'main.format_run') %}
+    {# Each tab covers every route that belongs to it, so the highlight
+       stays put through the confirm and results steps too. #}
+    {% set section = 'format' if request.endpoint in ('main.format_form', 'main.format_run')
+                     else ('help' if request.endpoint == 'main.help_page' else 'run') %}
     <nav class="site-nav">
       <a href="{{ url_for('main.index') }}"
-         class="{{ 'is-active' if not formatting else '' }}">Run optimization</a>
+         class="{{ 'is-active' if section == 'run' else '' }}">Run optimization</a>
       <a href="{{ url_for('main.format_form') }}"
-         class="{{ 'is-active' if formatting else '' }}">Format data</a>
+         class="{{ 'is-active' if section == 'format' else '' }}">Format data</a>
+      <a href="{{ url_for('main.help_page') }}"
+         class="{{ 'is-active' if section == 'help' else '' }}">Instructions</a>
     </nav>
   </header>
 

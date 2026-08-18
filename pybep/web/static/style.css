@@ -158,6 +158,116 @@ h1 {
 
 p { margin: 0 0 24px; color: var(--muted); }
 
+.card-wide { width: min(820px, 100%); }
+
+/* Heading row with the "?" shortcut into the instructions. */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.help-dot {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.help-dot:hover {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+.help-dot:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* --- Instructions page --- */
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px;
+  margin-bottom: 30px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.toc a {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--blue);
+  text-decoration: none;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.toc a:hover { background: var(--sky-wash); border-color: var(--blue); }
+
+.prose h2 {
+  margin: 34px 0 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: var(--ink);
+  /* Clears the heading when jumped to from the "?" deep links. */
+  scroll-margin-top: 20px;
+}
+
+.prose p { margin: 0 0 16px; line-height: 1.65; }
+.prose ul, .prose ol { margin: 0 0 16px; padding-left: 22px; color: var(--muted); }
+.prose li { margin-bottom: 9px; line-height: 1.6; }
+.prose strong { color: var(--ink); font-weight: 650; }
+.prose a { color: var(--blue); }
+
+.prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86em;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: var(--ink);
+}
+
+.prose dl { margin: 0 0 16px; }
+.prose dt {
+  font-weight: 650;
+  color: var(--ink);
+  font-size: 0.9rem;
+  margin-top: 12px;
+}
+.prose dd {
+  margin: 4px 0 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.prose .note {
+  background: var(--sky-wash);
+  border-left: 3px solid var(--sky);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 12px 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.prose .actions { margin-top: 30px; }
+
 .fields { display: grid; gap: 22px; margin-bottom: 26px; }
 
 /* --- Form controls --- */

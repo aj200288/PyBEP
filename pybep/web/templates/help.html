@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %} &middot; Instructions{% endblock %}
+{% block content %}
+<main class="card card-wide prose">
+  <h1>Instructions</h1>
+  <p>
+    PyBEP takes a measured full-cell OCV curve and works out which cathode and
+    which anode, combined and scaled how, reproduce it most closely.
+  </p>
+
+  <nav class="toc">
+    <a href="#files">Data files</a>
+    <a href="#optimization">Running an optimization</a>
+    <a href="#results">Reading the results</a>
+    <a href="#formatting">Formatting data</a>
+    <a href="#limits">Limits</a>
+  </nav>
+
+  <h2 id="files">Data files</h2>
+  <p>
+    Every curve, whatever it describes, is just two columns of numbers: state
+    of charge and voltage. Files may be <code>.txt</code>, <code>.csv</code> or
+    <code>.xlsx</code>, up to {{ max_upload_mb }} MB.
+  </p>
+  <ul>
+    <li>
+      <strong>Two numeric columns at least.</strong> One holds SOC, the other
+      voltage. If the file has more, you pick which is which after uploading.
+    </li>
+    <li>
+      <strong>The separator is detected for you</strong> &mdash; commas,
+      semicolons, tabs or spaces &mdash; as is the decimal mark, so
+      <code>0,85</code> and <code>0.85</code> both work.
+    </li>
+    <li>
+      <strong>Headers and footers are ignored.</strong> Lines of text above or
+      below the numbers are stripped automatically. Text <em>in the middle</em>
+      of the numbers is rejected, because at that point there is no way to tell
+      a stray label from corrupted data.
+    </li>
+    <li>
+      <strong>SOC may be 0&ndash;1 or 0&ndash;100.</strong> Anything reaching
+      past 1.5 is read as a percentage and divided by 100.
+    </li>
+    <li>
+      <strong>Order does not matter.</strong> Curves that run backwards, or
+      wander out of order, are sorted and flagged. Repeated SOC values are
+      nudged apart.
+    </li>
+    <li><strong>At least four rows of data.</strong></li>
+  </ul>
+  <p>
+    Every curve is finally resampled onto a common grid of 1001 points, which
+    is what makes different sources comparable.
+  </p>
+  <p class="note">
+    Anything unusual in your file produces a note above the results rather than
+    a silent correction &mdash; read those notes; they are the difference
+    between a fit and a coincidence.
+  </p>
+
+  <h2 id="optimization">Running an optimization</h2>
+  <ol>
+    <li>
+      <strong>Choose the battery OCV curve.</strong> This is your measurement:
+      the full-cell curve to be decomposed. Pick one of the
+      {{ battery_library|length }} bundled examples to try the tool out, or
+      upload your own.
+    </li>
+    <li>
+      <strong>Check the candidates.</strong>
+      {{ cathode_library|length }} reference cathodes and
+      {{ anode_library|length }} reference anodes are built in and all selected
+      by default, so you can usually leave this alone. Open a panel to see the
+      list, preview any curve, or untick ones that cannot apply to your cell.
+      Fewer candidates means a faster run. You can add your own files for a
+      material that is not in the list; those are used for that run only and
+      are not added to the shared list.
+    </li>
+    <li>
+      <strong>Set iterations.</strong> The search starts from random points, so
+      each run can land somewhere slightly different. More iterations repeat it
+      and keep the best, trading time for consistency. Start at 1 while you are
+      finding your way, raise it for a result you intend to keep.
+    </li>
+    <li>
+      <strong>Set the weights.</strong> These decide what &ldquo;closest&rdquo;
+      means. <em>Battery weight</em> fits the voltage curve itself.
+      <em>Differential capacity weight</em> fits its derivative instead, which
+      is far more sensitive to the position of peaks and plateaux &mdash; the
+      features that identify a material. The two always sum to 1, so moving one
+      moves the other. Fit on voltage alone and a smooth curve can hide a wrong
+      material; add derivative weight to make the peaks matter.
+    </li>
+    <li>
+      <strong>Confirm the columns.</strong> Only for files you uploaded: PyBEP
+      shows the first few rows with its guess pre-selected, and you correct it
+      if the guess is wrong. Built-in curves skip this step because their layout
+      is already known.
+    </li>
+  </ol>
+
+  <h2 id="results">Reading the results</h2>
+  <p>
+    The graph overlays your measured curve with the reconstruction, plus the
+    cathode and anode curves that produced it. Dashed sections are the parts of
+    each electrode curve lying outside the window actually used in the fit.
+  </p>
+  <dl>
+    <dt>Best cathode / anode ID</dt>
+    <dd>Which candidates won, named by their file.</dd>
+
+    <dt>Best parameters</dt>
+    <dd>
+      The four indices marking where each electrode curve was cut and stretched
+      to line up with the cell.
+    </dd>
+
+    <dt>Lowest RMSD</dt>
+    <dd>
+      Root-mean-square deviation between measurement and reconstruction, in
+      volts &mdash; lower is better. It is only comparable between runs using
+      the same weights, since changing them changes what is being minimised.
+    </dd>
+  </dl>
+  <p>
+    <strong>A winner is always reported</strong>, even when nothing fits well.
+    The RMSD, and your own eye on the graph, are what tell you whether the
+    answer means anything. If the best fit is poor, the right material is
+    probably not among the candidates.
+  </p>
+  <p>
+    Download the numbers as JSON, CSV or Excel. All three describe the same run.
+    JSON keeps full precision; Excel stores about 15 significant digits, so use
+    JSON if the last digits matter. <strong>Adjust settings and re-run</strong>
+    keeps the same curves and only changes the settings &mdash; the quick way to
+    see how sensitive a result is to the weights.
+  </p>
+
+  <h2 id="formatting">Formatting data</h2>
+  <p>
+    <a href="{{ url_for('main.format_form') }}">Format data</a> runs the same
+    cleaning on your files and hands them back as a zip, without optimizing
+    anything: each becomes a plain two-column, 1001-point file. Use it to
+    standardise a set of measurements, or to see exactly what PyBEP made of an
+    awkward file. Files in one batch must all be the same kind of curve, since
+    the type decides which orientation is expected &mdash; rising voltage for
+    cathodes and full cells, falling for anodes.
+  </p>
+
+  <h2 id="limits">Limits</h2>
+  <p>
+    The optimization compares every cathode against every anode, so the work
+    grows as cathodes &times; anodes &times; iterations. To keep the site
+    responsive:
+  </p>
+  <ul>
+    <li>at most {{ max_files }} cathode and {{ max_files }} anode candidates</li>
+    <li>at most {{ max_iterations }} iterations</li>
+    <li>uploads up to {{ max_upload_mb }} MB</li>
+  </ul>
+  <p class="note">
+    Uploaded files live only in your own session. They are deleted when you
+    start another run, and are never added to the built-in list that other
+    people see.
+  </p>
+
+  <div class="actions">
+    <a class="primary link-button" href="{{ url_for('main.index') }}">Run an optimization</a>
+    <a class="secondary link-button" href="{{ url_for('main.format_form') }}">Format data</a>
+  </div>
+</main>
+{% endblock %}

@@ -1,7 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 <main class="card">
-  <h1>Format data</h1>
+  <div class="page-head">
+    <h1>Format data</h1>
+    {# Opens in a new tab: navigating away would discard a file
+       already chosen, which browsers cannot restore. #}
+    <a class="help-dot" href="{{ url_for('main.help_page') }}#formatting"
+       target="_blank" rel="noopener"
+       title="Instructions (opens in a new tab)" aria-label="Instructions">?</a>
+  </div>
   <p>
     Convert raw measurement files into PyBEP's standard 1001-point layout.
     Upload your files, choose what kind of curves they are, and download the

@@ -2,7 +2,14 @@
 {% block content %}
 <main class="card">
   {# The brand is in the header now, so the card heading names the task. #}
-  <h1>Run optimization</h1>
+  <div class="page-head">
+    <h1>Run optimization</h1>
+    {# Opens in a new tab: navigating away would discard a file
+       already chosen, which browsers cannot restore. #}
+    <a class="help-dot" href="{{ url_for('main.help_page') }}#optimization"
+       target="_blank" rel="noopener"
+       title="Instructions (opens in a new tab)" aria-label="Instructions">?</a>
+  </div>
   <p>Choose a battery OCV curve and the reference electrodes to compare it against.</p>
 
   {% with messages = get_flashed_messages(category_filter=["error"]) %}

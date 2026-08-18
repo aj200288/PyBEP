@@ -44,6 +44,33 @@ client = app.test_client()
 check("index renders", client.get("/").status_code == 200)
 check("format page renders", client.get("/format").status_code == 200)
 
+# --- instructions -----------------------------------------------------
+resp = client.get("/help")
+help_page = resp.get_data(as_text=True)
+check("instructions page renders", resp.status_code == 200, resp.status_code)
+
+import re  # noqa: E402
+anchors = set(re.findall(r'<h2 id="([\w-]+)"', help_page))
+check("the contents list points only at sections that exist",
+      set(re.findall(r'<a href="#([\w-]+)"', help_page)) == anchors, anchors)
+
+for page, path in (("front", "/"), ("format", "/format")):
+    body = client.get(path).get_data(as_text=True)
+    target = re.search(r'class="help-dot" href="/help#([\w-]+)"', body)
+    check(f"the {page} page has a ? linking to a real section",
+          target is not None and target.group(1) in anchors,
+          target.group(1) if target else "no help-dot")
+    check(f"the {page} page's ? opens in a new tab, so a chosen file survives",
+          'class="help-dot"' in body
+          and 'target="_blank"' in body.split('class="help-dot"')[1][:200])
+
+check("instructions appear in the nav on every page",
+      all('>Instructions</a>' in client.get(p).get_data(as_text=True)
+          for p in ("/", "/format", "/help")))
+check("the nav marks the instructions tab as current",
+      re.search(r'href="/help"\s+class="is-active"', help_page) is not None,
+      re.findall(r'<a href="/\w*"[^>]*class="[^"]*"', help_page))
+
 # --- input clamping (the reason a public site needs a server-side cap) ---
 with app.test_request_context(
         "/upload", method="POST",

@@ -103,6 +103,23 @@ def index():
                            battery_library=battery_library_names())
 
 
+@bp.route('/help')
+def help_page():
+    """
+    The instructions. A page rather than a tooltip: it is long enough to
+    need headings, and being a real URL means it can be linked to a
+    colleague and printed.
+    """
+    return render_template(
+        'help.html',
+        max_iterations=current_app.config['MAX_ITERATIONS'],
+        max_files=current_app.config['MAX_CURVE_FILES'],
+        max_upload_mb=current_app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024),
+        cathode_library=library_names('cathode'),
+        anode_library=library_names('anode'),
+        battery_library=battery_library_names())
+
+
 @bp.route('/upload', methods=['POST'])
 def upload():
     # Candidate curves come from the bundled library by default; uploading
