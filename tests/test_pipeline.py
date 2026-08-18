@@ -113,6 +113,39 @@ x_final3, y_final3, warnings3, used_cols3 = load_ocv_curve(
 check("load_ocv_curve non_monotonic: 1001 points, monotonic warning present",
       len(x_final3) == 1001 and any("not monotonic" in w for w in warnings3), warnings3)
 
+# --- more than two columns --------------------------------------------
+# The shape most lab exports have: a bare row index in front of the data.
+
+df = read_raw_table(os.path.join(FDIR, "indexed_three_column.txt"))
+check("indexed_three_column: 3 cols, 30 rows", df.shape == (30, 3), df.shape)
+check("indexed_three_column: the index column survives as col 0",
+      list(df.iloc[:3, 0]) == [1.0, 2.0, 3.0], list(df.iloc[:3, 0]))
+check("indexed_three_column: index is not mistaken for SOC or OCV",
+      guess_column_roles(df) == (1, 2), guess_column_roles(df))
+
+df5 = read_raw_table(os.path.join(FDIR, "indexed_five_column.csv"))
+check("indexed_five_column: 5 cols, 30 rows", df5.shape == (30, 5), df5.shape)
+check("indexed_five_column: skips index, time and a constant current column",
+      guess_column_roles(df5) == (2, 3), guess_column_roles(df5))
+
+x_i, y_i, warn_i, used_i = load_ocv_curve(
+    os.path.join(FDIR, "indexed_three_column.txt"), curve_type='cathode',
+    column_choice=(1, 2))
+check("indexed_three_column: the chosen columns give a clean curve",
+      len(x_i) == 1001 and abs(x_i.min()) < 1e-9 and abs(x_i.max() - 1) < 1e-9
+      and 2.4 < y_i.min() < 2.6 and 3.5 < y_i.max() < 3.7,
+      (len(x_i), x_i.min(), x_i.max(), y_i.min(), y_i.max()))
+check("indexed_three_column: no warnings when the right columns are used",
+      warn_i == [], warn_i)
+
+# Picking the index column as OCV must not pass quietly.
+_x, _y, warn_bad, _u = load_ocv_curve(
+    os.path.join(FDIR, "indexed_three_column.txt"), curve_type='cathode',
+    column_choice=(1, 0))
+check("indexed_three_column: using the index as OCV is flagged",
+      any("outside the expected battery voltage" in w for w in warn_bad),
+      warn_bad)
+
 # --- the core/UI seam -------------------------------------------------
 # core must never import a UI toolkit; it asks for one via column_resolver.
 

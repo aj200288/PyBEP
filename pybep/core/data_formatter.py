@@ -175,27 +175,43 @@ def read_raw_table(file_path):
 def guess_column_roles(df):
     """
     Guess which column is SOC and which is OCV from value ranges: SOC is
-    expected to be bounded in roughly [0, 1] or [0, 100], OCV is not.
+    expected to be bounded in roughly [0, 1] or [0, 100], OCV to look like
+    a battery voltage.
 
     Both UI layers use this to pre-select the most likely answer before
     asking the user to confirm (Tkinter radio buttons in the desktop app,
-    a dropdown in the web app).
+    a dropdown in the web app). It is a starting point, not an authority —
+    the user is always shown the choice.
     """
     n_cols = df.shape[1]
-    scores = []
-    for i in range(n_cols):
-        col = df.iloc[:, i].to_numpy(dtype=float)
-        if col.min() >= -0.05 and col.max() <= 1.05:
-            score = 2
-        elif col.min() >= -1 and col.max() <= 105:
-            score = 1
-        else:
-            score = 0
-        scores.append(score)
+    columns = [df.iloc[:, i].to_numpy(dtype=float) for i in range(n_cols)]
 
-    soc_idx = int(np.argmax(scores))
+    def soc_score(col):
+        if col.min() >= -0.05 and col.max() <= 1.05:
+            return 2
+        if col.min() >= -1 and col.max() <= 105:
+            return 1
+        return 0
+
+    def ocv_score(col):
+        if col.min() == col.max():
+            return 0  # a constant column (a setpoint, a flag) is not a curve
+        if col.min() < OCV_RANGE[0] or col.max() > OCV_RANGE[1]:
+            return 0
+        # A run of whole numbers is far more likely a row index than a
+        # measured voltage that happens to land in range.
+        return 1 if np.allclose(col, np.round(col)) else 2
+
+    soc_idx = int(np.argmax([soc_score(c) for c in columns]))
     remaining = [i for i in range(n_cols) if i != soc_idx]
-    ocv_idx = remaining[0] if remaining else soc_idx
+    if not remaining:
+        return soc_idx, soc_idx
+
+    # Scored rather than "whatever column comes next": exports commonly
+    # lead with a row index or a timestamp, and taking the first leftover
+    # column silently made the index the voltage. max() keeps the earliest
+    # column on a tie, so a plain two-column file resolves as it always did.
+    ocv_idx = max(remaining, key=lambda i: ocv_score(columns[i]))
     return soc_idx, ocv_idx
 
 

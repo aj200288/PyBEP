@@ -524,6 +524,35 @@ if link:
 
 check("only one file offered, so no zip button is shown",
       "as zip" not in body, [l for l in body.splitlines() if "zip" in l])
+# A real multi-column export: the picker must offer every column, and the
+# file must convert using the two the user names.
+FIXTURES = os.path.join(ROOT, "tests", "fixtures")
+indexed = os.path.join(FIXTURES, "indexed_three_column.txt")
+if os.path.exists(indexed):
+    resp = client.post("/format", data={
+        "data_files": [upload_file(indexed)],
+        "curve_type": "cathode",
+    }, content_type="multipart/form-data")
+    page = resp.get_data(as_text=True)
+    check("a 3-column file offers all three columns in the picker",
+          page.count('<option value="2"') == 2, page.count('<option value="2"'))
+    preselected = re.findall(r'<option value="(\d+)" selected>', page)
+    check("the index column is not pre-selected; SOC and OCV are",
+          preselected == ["1", "2"], preselected)
+
+    resp = client.post("/format/confirm", data={"soc_0": "1", "ocv_0": "2"})
+    body3 = resp.get_data(as_text=True)
+    link = re.search(r'href="(/format/file/\d+)"', body3)
+    check("a 3-column file converts once the columns are named",
+          link is not None, [l for l in body3.splitlines() if "banner" in l][:3])
+    if link:
+        rows3 = client.get(link.group(1)).get_data(as_text=True).strip().splitlines()
+        first, last = rows3[0].split("\t"), rows3[-1].split("\t")
+        check("the converted 3-column file is 1001 SOC/OCV pairs",
+              len(rows3) == 1001 and abs(float(first[0])) < 1e-6
+              and abs(float(last[0]) - 1) < 1e-6 and 2.4 < float(first[1]) < 2.6,
+              (len(rows3), first, last))
+
 check("the format tab is still lit on the confirm and results pages",
       active_tab(body) == "/format"
       and active_tab(swapped.get_data(as_text=True)) == "/format",

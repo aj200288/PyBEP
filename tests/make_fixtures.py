@@ -80,5 +80,20 @@ with open(os.path.join(FDIR, "invalid_interior.txt"), "w") as f:
 with open(os.path.join(FDIR, "too_few_rows.txt"), "w") as f:
     f.write("0.0 2.5\n0.5 3.0\n")
 
+# 11. more than two columns, led by a bare row index — the shape most lab
+# exports actually have, and the case the column picker exists for. The
+# index is monotonic like a real SOC column, so a heuristic that only
+# looks for "rises steadily" can be fooled into choosing it.
+with open(os.path.join(FDIR, "indexed_three_column.txt"), "w") as f:
+    f.write("Index\tSOC\tOCV\n")
+    for i, (x, y) in enumerate(zip(soc, ocv), start=1):
+        f.write(f"{i}\t{x}\t{y}\n")
+
+# 12. the same, as a wider csv with columns either side of the useful two
+with open(os.path.join(FDIR, "indexed_five_column.csv"), "w") as f:
+    f.write("Index,Time_s,SOC,OCV,Current_A\n")
+    for i, (x, y) in enumerate(zip(soc, ocv), start=1):
+        f.write(f"{i},{i * 60},{x},{y},{0.05:.3f}\n")
+
 print("Fixtures created in", FDIR)
 print(os.listdir(FDIR))
