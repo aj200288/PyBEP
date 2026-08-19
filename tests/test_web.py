@@ -133,7 +133,23 @@ with client.session_transaction() as sess:
     sess["format_outputs"] = ["../setup.cfg"]
 check("a workdir outside the temp root serves nothing",
       client.get("/format/file/0").status_code == 404
-      and client.get("/download").status_code == 404)
+      and client.get("/download").status_code == 404
+      and client.get("/format/download").status_code == 404)
+
+# /format/download rebuilds the path from the session directory, so a
+# cookie naming some other file must get nowhere. The bait is a file we
+# made ourselves, and the route only ever reads.
+bait_dir = tempfile.mkdtemp(prefix="not_pybep_")
+bait = os.path.join(bait_dir, "bait.zip")
+open(bait, "w").write("should never be served")
+empty_workdir = pipeline.create_session_workdir()
+with client.session_transaction() as sess:
+    sess["workdir"] = empty_workdir
+    sess["format_zip"] = bait          # the key the route used to trust
+check("the zip route ignores a path named by the cookie",
+      client.get("/format/download").status_code == 404)
+shutil.rmtree(bait_dir, ignore_errors=True)
+shutil.rmtree(empty_workdir, ignore_errors=True)
 
 for escape in ("../../setup.cfg", "..\\..\\setup.cfg", "/etc/passwd"):
     joined = _safe_join(tempfile.gettempdir(), escape)

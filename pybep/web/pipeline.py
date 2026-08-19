@@ -286,6 +286,11 @@ def run_optimization(cathodes, anodes, battery_soc, battery_ocv, settings,
 
 FORMATTED_DIR = 'formatted'
 
+# Both the writer below and the route that serves the file derive the
+# path from this, so neither has to trust a name that came back from
+# the browser.
+FORMATTED_ZIP = 'formatted_data.zip'
+
 
 def save_format_uploads(file_storages, curve_type, workdir):
     """
@@ -331,7 +336,7 @@ def convert_uploads(paths, curve_type, column_choices, workdir, rejected=None):
     if not report['stored']:
         return report, None
 
-    zip_path = os.path.join(workdir, 'formatted_data.zip')
+    zip_path = os.path.join(workdir, FORMATTED_ZIP)
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         for stored in report['stored']:
             zf.write(os.path.join(output_folder, stored), original_name(stored))

@@ -495,7 +495,6 @@ def format_confirm():
         flash(f"Formatting failed: {e}", "error")
         return redirect(url_for('main.format_form'))
 
-    session['format_zip'] = zip_path
     session['format_outputs'] = report['stored']
     return render_template('format_results.html', report=report,
                            curve_type=curve_type, have_zip=zip_path is not None)
@@ -526,10 +525,18 @@ def format_file(index):
 
 @bp.route('/format/download')
 def format_download():
-    zip_path = session.get('format_zip')
-    if not zip_path or not os.path.exists(zip_path):
+    """
+    Every converted file in one zip.
+
+    The path is rebuilt from the session's own directory rather than read
+    out of the cookie, so this route can only ever serve that session's
+    zip — the same rule /download and /format/file follow.
+    """
+    workdir = _session_workdir()
+    path = _safe_join(workdir, pipeline.FORMATTED_ZIP) if workdir else None
+    if not path or not os.path.isfile(path):
         abort(404)
-    return send_file(zip_path, as_attachment=True,
+    return send_file(path, as_attachment=True,
                      download_name='pybep_formatted_data.zip')
 
 
