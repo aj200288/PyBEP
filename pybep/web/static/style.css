@@ -829,6 +829,32 @@ a.download-btn {
   align-items: center;
 }
 
+/* --- The column step, over the page it belongs to --- */
+
+/* Confirming columns is one stop inside a run, so it opens over the form
+   that started it rather than replacing the page. The backdrop covers
+   everything, which is what stops the mouse reaching the form behind;
+   the inert attribute on it stops the keyboard. */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  background: rgba(0, 34, 63, .45);
+  backdrop-filter: blur(2px);
+}
+
+/* margin: auto centres a short dialog, and when enough files make it
+   taller than the window it top-aligns instead and the backdrop scrolls —
+   which a centred dialog would not, cutting off its own buttons. */
+.modal-card {
+  width: min(720px, 100%);
+  margin: auto;
+}
+
 /* --- While a run is going --- */
 
 /* A form POST leaves the browser on the old page with nothing to show for

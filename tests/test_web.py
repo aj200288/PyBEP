@@ -888,14 +888,25 @@ running_pages["the confirm page"] = conf.post(
           "library_anodes": [lib_anodes[0]],
           "iterations": "1"}).get_data(as_text=True)
 
+# The confirm page carries two of these forms: the one in the dialog, and
+# the inert copy of the run form on the page behind it.
+LONG_RUN_FORM = (r'<form class="[^"]*js-long-run[^"]*" method="POST"'
+                 r' action="/(?:upload|confirm)"[^>]*>.*?</form>')
+
 for where, page in running_pages.items():
     check(f"{where} carries exactly one running battery",
           page.count('class="run-status"') == 1,
           page.count('class="run-status"'))
-    check(f"{where} marks its run form as a long job",
-          re.search(r'<form class="[^"]*js-long-run[^"]*" method="POST"'
-                    r' action="/(?:upload|confirm)"', page) is not None,
-          [l.strip() for l in page.splitlines() if "<form" in l][:2])
+    # And it has to be in the form that starts the run, below the buttons
+    # it stands in for: anywhere else and it would appear somewhere other
+    # than where the click landed.
+    holding = [f for f in re.findall(LONG_RUN_FORM, page, re.S)
+               if 'class="run-status"' in f]
+    check(f"{where} puts the battery in the form that starts the run",
+          len(holding) == 1 and 'class="actions"' in holding[0]
+          and holding[0].rindex('class="actions"')
+              < holding[0].index('class="run-status"'),
+          len(re.findall(LONG_RUN_FORM, page, re.S)))
 
 # Raising it for a download would leave it up for good: the file arrives
 # without the page ever navigating.
@@ -905,18 +916,7 @@ check("the download form is deliberately not marked",
       download_form is not None and "js-long-run" not in download_form.group(0),
       download_form.group(0) if download_form else "no download form")
 
-# The battery stands in for the button, so it has to be inside the form
-# and below the buttons it replaces — anywhere else and it would appear
-# somewhere other than where the click landed.
-run_form = re.search(r'<form class="[^"]*js-long-run.*?</form>',
-                     running_pages["the front page"], re.S)
-inside = run_form.group(0) if run_form else ""
-check("the battery sits in the run form, after the buttons it stands in for",
-      'class="run-status"' in inside and 'class="actions"' in inside
-      and inside.rindex('class="actions"') < inside.index('class="run-status"'),
-      "no run form" if not run_form else
-      [l.strip() for l in inside.splitlines()
-       if "actions" in l or "run-status" in l][:4])
+inside = re.search(LONG_RUN_FORM, running_pages["the front page"], re.S).group(0)
 
 # And it takes their place rather than floating over the page: the last
 # graph and the numbers beside it stay readable while the run works.
@@ -928,6 +928,20 @@ check("starting a run swaps the buttons for the battery, in place",
       and ".js-long-run.is-running .actions" in css
       and ".js-long-run.is-running .run-status" in css,
       rule.group(1).strip() if rule else "no .run-status rule")
+
+# Confirming columns is one stop inside a run, so it opens over the run
+# page rather than replacing it: the form and the empty panel are still
+# there behind it, and the form is inert so the keyboard cannot reach it
+# through the backdrop.
+conf_page = running_pages["the confirm page"]
+check("the column step opens over the form instead of replacing it",
+      '<div class="modal">' in conf_page
+      and 'class="card" inert>' in conf_page
+      and 'class="site-header" inert>' in conf_page
+      and 'class="placeholder"' in conf_page
+      and 'id="battery_choice"' in conf_page,
+      [l.strip() for l in conf_page.splitlines()
+       if "modal" in l or "inert" in l][:3])
 
 # One button starts a run, on every page that can start one: a second
 # submit pointing somewhere else with formaction was how the form used to

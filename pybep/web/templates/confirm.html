@@ -1,55 +1,66 @@
 {% extends "base.html" %}
 {% block content %}
-<main class="card" style="width: min(720px, 95vw);">
-  <div class="page-head">
-    <h1>Confirm columns</h1>
-    {# Opens in a new tab: navigating away would discard a file
-       already chosen, which browsers cannot restore. #}
-    <a class="help-dot" href="{{ url_for('main.help_page') }}#optimization"
-       target="_blank" rel="noopener"
-       title="Instructions (opens in a new tab)" aria-label="Instructions">?</a>
-  </div>
-  <p>
-    Confirm which column is SOC and which is OCV for each file you uploaded
-    (the auto-detected guess is pre-selected). Built-in reference curves are
-    already checked and aren't listed here.
-  </p>
+{# Confirming columns is one stop inside a run, not somewhere else to be, so
+   the form and the panel it started from stay on the page and the question
+   opens over them. behind_modal, set by the route, makes the page behind
+   inert: the backdrop already stops the mouse reaching it, and inert stops
+   the keyboard — which is what lets the dialog claim aria-modal honestly. #}
+{% include "_run_form.html" %}
+{% include "_placeholder.html" %}
 
-  {% if errors %}
-  <div class="banner banner-error">
-    <strong>{{ errors|length }} file(s) could not be read and were skipped:</strong>
-    <ul>
-      {% for e in errors %}
-      <li>{{ e.filename }} ({{ e.curve_type }}): {{ e.message }}</li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
-
-  {% if previews %}
-  <form class="js-long-run" method="POST" action="{{ url_for('main.confirm') }}">
-    <div class="confirm-list">
-      {% for p in previews %}
-      {% with key = p.file_id %}
-        {% include "_column_picker.html" %}
-      {% endwith %}
-      {% endfor %}
+<div class="modal">
+  <div class="card modal-card" role="dialog" aria-modal="true"
+       aria-labelledby="confirm-title">
+    <div class="page-head">
+      <h1 id="confirm-title">Confirm columns</h1>
+      {# Opens in a new tab: navigating away would discard a file
+         already chosen, which browsers cannot restore. #}
+      <a class="help-dot" href="{{ url_for('main.help_page') }}#optimization"
+         target="_blank" rel="noopener"
+         title="Instructions (opens in a new tab)" aria-label="Instructions">?</a>
     </div>
-
-    <div class="actions">
-      <button class="primary" type="submit">Run optimization</button>
-      <a class="secondary link-button" href="{{ url_for('main.index') }}">Start over</a>
-    </div>
-    <p class="file-hint run-hint" style="margin-top:12px;">
-      The optimization can take a while &mdash; leave this tab open while it runs.
+    <p>
+      Confirm which column is SOC and which is OCV for each file you uploaded
+      (the auto-detected guess is pre-selected). Built-in reference curves are
+      already checked and aren't listed here.
     </p>
 
-    {# Last in the form on purpose: with the button and the hint above it
-       hidden, this comes to rest exactly where the button was. #}
-    {% include "_running.html" %}
-  </form>
-  {% else %}
-  <p>No files could be read. <a href="{{ url_for('main.index') }}">Go back and try again</a>.</p>
-  {% endif %}
-</main>
+    {% if errors %}
+    <div class="banner banner-error">
+      <strong>{{ errors|length }} file(s) could not be read and were skipped:</strong>
+      <ul>
+        {% for e in errors %}
+        <li>{{ e.filename }} ({{ e.curve_type }}): {{ e.message }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if previews %}
+    <form class="js-long-run" method="POST" action="{{ url_for('main.confirm') }}">
+      <div class="confirm-list">
+        {% for p in previews %}
+        {% with key = p.file_id %}
+          {% include "_column_picker.html" %}
+        {% endwith %}
+        {% endfor %}
+      </div>
+
+      <div class="actions">
+        <button class="primary" type="submit">Run optimization</button>
+        <a class="secondary link-button" href="{{ url_for('main.index') }}">Start over</a>
+      </div>
+      <p class="file-hint run-hint" style="margin-top:12px;">
+        The optimization can take a while &mdash; leave this tab open while it runs.
+      </p>
+
+      {# Last in the form on purpose: with the button and the hint above it
+         hidden, this comes to rest exactly where the button was. #}
+      {% include "_running.html" %}
+    </form>
+    {% else %}
+    <p>No files could be read. <a href="{{ url_for('main.index') }}">Go back and try again</a>.</p>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

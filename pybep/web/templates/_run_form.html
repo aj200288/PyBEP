@@ -10,7 +10,7 @@
   chosen_anodes, carried. The two "chosen" lists are None on a first
   visit, which means every curve is ticked.
 #}
-<main class="card">
+<main class="card"{{ ' inert' if behind_modal else '' }}>
   {# The brand is in the header now, so the card heading names the task. #}
   <div class="page-head">
     <h1>Run optimization</h1>
@@ -132,8 +132,10 @@
     </div>
 
     {# Last in the form on purpose: with the buttons above it hidden, this
-       comes to rest exactly where they were. #}
-    {% include "_running.html" %}
+       comes to rest exactly where they were. Left out behind a dialog: that
+       copy of the form is inert and can never run, and a second copy of the
+       script would bind every handler on the page twice. #}
+    {% if not behind_modal %}{% include "_running.html" %}{% endif %}
   </form>
 
   <script>
