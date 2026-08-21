@@ -340,14 +340,7 @@ def upload():
         session['choices'] = {}
         return _run_and_store(files_meta, {}, session['settings'], workdir)
 
-    # The question opens over the run page, so the page behind it has to be
-    # rendered too — the form as it was just filled in, and the empty panel.
-    context = _form_context()
-    # Not "left over from an earlier run": these are the files the dialog is
-    # asking about, and naming them as carried would read as a warning.
-    context['carried'] = {curve_type: [] for curve_type in CURVE_TYPES}
-    return render_template('confirm.html', previews=previews, errors=errors,
-                           behind_modal=True, **context)
+    return render_template('confirm.html', previews=previews, errors=errors)
 
 
 @bp.route('/confirm', methods=['POST'])

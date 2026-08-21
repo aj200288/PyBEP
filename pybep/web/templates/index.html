@@ -1,5 +1,32 @@
 {% extends "base.html" %}
 {% block content %}
 {% include "_run_form.html" %}
-{% include "_placeholder.html" %}
+
+{# The right-hand column, standing empty until there is a run to put in
+   it. It carries the same width as the results so the form does not
+   shift sideways the moment they arrive. #}
+<section class="placeholder">
+  <h2>Your results appear here</h2>
+  <p>
+    Choose a battery OCV curve and the electrodes to compare it against, then
+    press <strong>Run optimization</strong>. The graph, the best-matching pair
+    and the download buttons all land in this panel.
+  </p>
+  <p>
+    The form stays where it is, so you can move a slider and run again with the
+    last graph still beside it.
+  </p>
+  <p class="file-hint">
+    The optimization can take a while &mdash; leave this tab open while it runs.
+  </p>
+
+  {# Refreshing sets a run aside rather than throwing it away, so there is
+     always a way back to one that was still wanted. #}
+  {% if hidden_results %}
+  <p class="file-hint">
+    Your last run is still here.
+    <a href="{{ url_for('main.index', restore=1) }}">Show it again</a>.
+  </p>
+  {% endif %}
+</section>
 {% endblock %}

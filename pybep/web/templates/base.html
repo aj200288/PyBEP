@@ -8,7 +8,7 @@
   <title>PyBEP{% block title %}{% endblock %}</title>
 </head>
 <body>
-  <header class="site-header"{{ ' inert' if behind_modal else '' }}>
+  <header class="site-header">
     {# The mark starts over, the way a refresh does. The tabs beside it
        go to a section without disturbing a run in progress. #}
     <a class="brand" href="{{ url_for('main.index', reset=1) }}"
