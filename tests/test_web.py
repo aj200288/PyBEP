@@ -733,6 +733,20 @@ check("and the two flows keep their own directories",
       and sticky.get("/download").status_code == 200,
       (sticky.get(fmt_links[0]).status_code, sticky.get("/download").status_code))
 
+# Pressing Continue and then walking away from the column-confirmation
+# step leaves uploads on disk with no run behind them.
+abandoned = app.test_client()
+abandoned.post("/upload", content_type="multipart/form-data", data={
+    "battery_file": [upload_file(battery)],
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1"})
+away = abandoned.get("/").get_data(as_text=True)
+check("an abandoned run is not offered for re-running",
+      "formaction" not in away and "carried-note" not in away,
+      [l.strip() for l in away.splitlines()
+       if "formaction" in l or "carried-note" in l])
+
 # The stored view is JSON, and JSON has no tuples: without a conversion on
 # the way back the page would read [1, 701, 82, 982] where PyBEP has
 # always read (1, 701, 82, 982).

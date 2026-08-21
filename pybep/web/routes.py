@@ -191,6 +191,11 @@ def index():
     workdir = _session_workdir()
     view = pipeline.load_result_view(workdir) if workdir else None
     if view is None:
+        # Files can be sitting in the directory with no run behind them —
+        # someone who pressed Continue and then walked away from the
+        # column-confirmation step. Offering to re-run those would offer
+        # something that has never run.
+        context['carried'] = {curve_type: [] for curve_type in CURVE_TYPES}
         return render_template('index.html', **context)
     # What was computed wins over what the form is offering to do next.
     context.update(view)
