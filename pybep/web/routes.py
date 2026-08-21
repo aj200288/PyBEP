@@ -375,8 +375,13 @@ def adjust():
     curves already chosen — the point being not to pick the files again
     just to try three iterations instead of one.
 
-    POST only: the settings form lives on the results page beside the
-    graph it produced, so there is no page of its own to GET.
+    Nothing on the site posts here at present: the "Re-run with the same
+    files" button that did was taken off the form, leaving one button that
+    always goes through /upload. The route is kept because it is the only
+    way to run without picking the files again, so putting that back is a
+    button in a template rather than a feature to write.
+
+    POST only: there was never a page of its own to GET.
     """
     files_meta = session.get('files')
     settings = session.get('settings')

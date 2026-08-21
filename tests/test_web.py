@@ -325,10 +325,9 @@ check("the collapsed summary says how many are selected",
 check("the front page keeps the results half of the page ready and empty",
       'class="placeholder"' in body and "results appear here" in body.lower(),
       [l.strip() for l in body.splitlines() if "placeholder" in l])
-check("nothing is offered for re-running before anything has run",
-      'formaction="' not in body and "carried-note" not in body,
-      [l.strip() for l in body.splitlines()
-       if 'formaction="' in l or "carried-note" in l])
+check("nothing is carried over before anything has been uploaded",
+      "carried-note" not in body,
+      [l.strip() for l in body.splitlines() if "carried-note" in l])
 
 file_inputs = {re.search(r'name="(\w+)"', tag).group(1): tag
                for tag in re.findall(r"<input[^>]*type=\"file\"[^>]*>", body)}
@@ -518,15 +517,13 @@ check("the sliders start from the settings just used",
 check("the form carries the iteration ceiling with it",
       f'max="{MAX_ITERATIONS}" step="1"' in body,
       re.findall(r'<input id="slider-iterations"[^>]*>', body))
-# A browser will not refill a file input, so pressing Continue would run
-# without the uploaded curve. Both halves of the way out have to be there.
+# A browser will not refill a file input, so the box comes back empty and
+# a run started from there would go without the uploaded curve. Naming the
+# file is what stops that happening quietly.
 check("the uploaded file the form cannot show is named, not silently dropped",
       "carried-note" in body
       and os.path.splitext(os.path.basename(battery))[0] in body,
       [l.strip() for l in body.splitlines() if "carried-note" in l])
-check("and a re-run that keeps it is offered alongside",
-      'formaction="/adjust"' in body and "formnovalidate" in body,
-      [l.strip() for l in body.splitlines() if 'formaction="' in l])
 check("no settings page of its own is left to navigate to",
       client.get("/adjust").status_code == 405 and 'href="/adjust"' not in body)
 
@@ -559,10 +556,9 @@ lib_only = client.post("/upload", data={
 }, content_type="multipart/form-data", follow_redirects=True).get_data(as_text=True)
 check("a new run wipes the previous run's uploads",
       not os.path.isdir(old_workdir), old_workdir)
-check("a library-only run has nothing to carry, so offers no extra re-run",
-      "carried-note" not in lib_only and 'formaction="' not in lib_only,
-      [l.strip() for l in lib_only.splitlines()
-       if "carried-note" in l or "formaction" in l])
+check("a library-only run has nothing to carry, so says nothing about files",
+      "carried-note" not in lib_only,
+      [l.strip() for l in lib_only.splitlines() if "carried-note" in l])
 
 client.get("/")  # drop any flash left over before the checks below
 resp = client.post("/adjust", data={"iterations": "1", "slider_a": "0.5"},
@@ -813,8 +809,8 @@ sticky.get("/")
 idle = time.time() - os.path.getmtime(sticky_dir)
 check("simply using the page resets the idle clock", idle < 60, round(idle))
 
-# Pressing Continue and then walking away from the column-confirmation
-# step leaves uploads on disk with no run behind them.
+# Starting a run and then walking away from the column-confirmation step
+# leaves uploads on disk with no run behind them.
 abandoned = app.test_client()
 abandoned.post("/upload", content_type="multipart/form-data", data={
     "battery_file": [upload_file(battery)],
@@ -822,10 +818,9 @@ abandoned.post("/upload", content_type="multipart/form-data", data={
     "library_anodes": [lib_anodes[0]],
     "iterations": "1"})
 away = abandoned.get("/").get_data(as_text=True)
-check("an abandoned run is not offered for re-running",
-      'formaction="' not in away and "carried-note" not in away,
-      [l.strip() for l in away.splitlines()
-       if 'formaction="' in l or "carried-note" in l])
+check("an abandoned run leaves no files to be carried over",
+      "carried-note" not in away,
+      [l.strip() for l in away.splitlines() if "carried-note" in l])
 
 # The stored view is JSON, and JSON has no tuples: without a conversion on
 # the way back the page would read [1, 701, 82, 982] where PyBEP has
@@ -933,6 +928,14 @@ check("starting a run swaps the buttons for the battery, in place",
       and ".js-long-run.is-running .actions" in css
       and ".js-long-run.is-running .run-status" in css,
       rule.group(1).strip() if rule else "no .run-status rule")
+
+# One button starts a run, on every page that can start one: a second
+# submit pointing somewhere else with formaction was how the form used to
+# offer a re-run, and it is not offered any more.
+for where, page in running_pages.items():
+    check(f"{where} has one way to start a run, not two",
+          'formaction="' not in page,
+          [l.strip() for l in page.splitlines() if 'formaction="' in l])
 
 # Stop keeps the user's way out of a run open. It has to be a plain
 # button: type="submit" would start a second run and type="reset" would

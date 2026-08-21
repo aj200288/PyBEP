@@ -10,7 +10,6 @@
   chosen_anodes, carried. The two "chosen" lists are None on a first
   visit, which means every curve is ticked.
 #}
-{% set has_carried = carried.cathode or carried.anode or carried.battery %}
 <main class="card">
   {# The brand is in the header now, so the card heading names the task. #}
   <div class="page-head">
@@ -50,8 +49,7 @@
         <span class="carried-note">
           Still on the server from this session:
           <strong>{{ carried.battery|join(', ') }}</strong>. A browser will not put
-          a file back into the box, so choose it again for a fresh run &mdash; or
-          keep it as it is with <em>Re-run with the same files</em> below.
+          a file back into the box, so choose it again before running.
         </span>
         {% endif %}
       </div>
@@ -109,9 +107,9 @@
       {% if carried_names %}
       <span class="carried-note">
         Still on the server from this session:
-        <strong>{{ carried_names|join(', ') }}</strong>. Choose the file again to
-        include it in a fresh run &mdash; or keep it as it is with
-        <em>Re-run with the same files</em> below.
+        <strong>{{ carried_names|join(', ') }}</strong>. A browser will not put
+        a file back into the box, so choose it again to include it in the
+        next run.
       </span>
       {% endif %}
     </div>
@@ -133,18 +131,6 @@
       <button class="secondary" type="reset">Reset</button>
     </div>
 
-    {% if has_carried %}
-    {# Sends the settings above straight to /adjust, which re-runs the curves
-       already saved for this session. formnovalidate is not optional: the
-       battery file input is empty and marked required, and would otherwise
-       block this button along with Run optimization. #}
-    <div class="actions">
-      <button class="secondary" type="submit" formnovalidate
-              formaction="{{ url_for('main.adjust') }}">
-        Re-run with the same files
-      </button>
-    </div>
-    {% endif %}
 
     {# Last in the form on purpose: with the buttons above it hidden, this
        comes to rest exactly where they were. #}

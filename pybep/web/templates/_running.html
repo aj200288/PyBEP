@@ -61,10 +61,10 @@
         form.classList.remove('was-stopped');
         form.classList.add('is-running');
         // Hiding the button that is doing the submitting is safe; disabling
-        // it is not, because a disabled submitter can lose its formaction on
-        // the way out. So the swap above happens now and this waits a tick.
-        // It still earns its keep: the buttons are only out of sight, and
-        // Enter would otherwise start a second run on top of the first.
+        // it during its own submit event is not reliably so. Hence the swap
+        // above happening now and this waiting a tick. It earns its keep:
+        // the button is only out of sight, and Enter would otherwise start
+        // a second run on top of the first.
         setTimeout(function () {
           submitButtons().forEach(function (b) { b.disabled = true; });
         }, 0);
