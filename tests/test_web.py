@@ -871,40 +871,52 @@ check("the format tab is still lit on the confirm and results pages",
 
 # --- something to watch while a run is going ---------------------------
 # A run is a form POST: the browser sits on the old page for up to a
-# minute with nothing to show for it, so submitting raises an overlay that
-# the page answering the POST carries away with the rest of the document.
-overlay_pages = {
+# minute with nothing to show for it, so submitting raises an indicator
+# that the page answering the POST carries away with the document.
+running_pages = {
     "the front page": app.test_client().get("/").get_data(as_text=True),
     "the results page": sticky.get("/").get_data(as_text=True),
 }
 conf = app.test_client()
-overlay_pages["the confirm page"] = conf.post(
+running_pages["the confirm page"] = conf.post(
     "/upload", content_type="multipart/form-data",
     data={"battery_file": [upload_file(battery)],
           "library_cathodes": [lib_cathodes[0]],
           "library_anodes": [lib_anodes[0]],
           "iterations": "1"}).get_data(as_text=True)
 
-for where, page in overlay_pages.items():
-    check(f"{where} carries exactly one running overlay",
-          page.count('id="run-overlay"') == 1, page.count('id="run-overlay"'))
+for where, page in running_pages.items():
+    check(f"{where} carries exactly one running indicator",
+          page.count('id="run-status"') == 1, page.count('id="run-status"'))
     check(f"{where} marks its run form as a long job",
           re.search(r'<form class="[^"]*js-long-run[^"]*" method="POST"'
                     r' action="/(?:upload|confirm)"', page) is not None,
           [l.strip() for l in page.splitlines() if "<form" in l][:2])
 
-# Raising the overlay for a download would leave it up for good: the file
-# arrives without the page ever navigating.
+# Raising it for a download would leave it up for good: the file arrives
+# without the page ever navigating.
 download_form = re.search(r'<form[^>]*class="[^"]*download-form[^"]*"[^>]*>',
-                          overlay_pages["the results page"])
+                          running_pages["the results page"])
 check("the download form is deliberately not marked",
       download_form is not None and "js-long-run" not in download_form.group(0),
       download_form.group(0) if download_form else "no download form")
 
-check("the overlay starts hidden and has something to show when it is not",
-      'class="run-overlay"' in overlay_pages["the front page"]
-      and "is-visible" in overlay_pages["the front page"]
-      and "battery-fill" in overlay_pages["the front page"])
+check("the indicator starts hidden and has something to show when it is not",
+      'class="run-status"' in running_pages["the front page"]
+      and "is-visible" in running_pages["the front page"]
+      and "battery-fill" in running_pages["the front page"])
+
+# And it has to stay out of the way. A minute is long enough that people
+# go on reading the last graph while it works, so this is a corner card
+# that lets clicks through, not a cover over the page.
+css = app.test_client().get("/static/style.css").get_data(as_text=True)
+corner = re.search(r"\.run-status \{(.*?)\}", css, re.S)
+check("the running indicator sits in a corner and lets clicks through",
+      corner is not None
+      and "position: fixed" in corner.group(1)
+      and "pointer-events: none" in corner.group(1)
+      and "inset: 0" not in corner.group(1),
+      corner.group(1).strip() if corner else "no .run-status rule")
 
 # --- rejects bad input ------------------------------------------------
 resp = client.post("/format", data={

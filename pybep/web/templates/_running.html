@@ -4,43 +4,48 @@
   which reads as "nothing happened" — so the submit that starts a run puts
   this up and the page that answers takes it away.
 
+  It sits in the corner and lets clicks through rather than covering the
+  page. A minute is long enough that people want to go on reading the last
+  graph, the notes on their data, or the settings they just changed, and
+  taking the page away from them to say "please wait" would stop that.
+
   Every form that starts a long job carries class="js-long-run". The
   download form on the results page deliberately does not: it never
-  navigates, so an overlay raised for it would never come down.
+  navigates, so an indicator raised for it would never come down.
 #}
-<div class="run-overlay" id="run-overlay" role="status" aria-live="polite">
-  <div class="run-overlay-card">
-    <div class="battery" aria-hidden="true">
-      <div class="battery-body">
-        <div class="battery-fill"></div>
-        <svg class="battery-bolt" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 2v11h3v9l7-12h-4l4-8z"/>
-        </svg>
-      </div>
-      <div class="battery-cap"></div>
+<div class="run-status" id="run-status" role="status" aria-live="polite">
+  <div class="battery" aria-hidden="true">
+    <div class="battery-body">
+      <div class="battery-fill"></div>
+      <svg class="battery-bolt" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 2v11h3v9l7-12h-4l4-8z"/>
+      </svg>
     </div>
-    <p class="run-overlay-title">Running the optimization</p>
-    <p class="run-overlay-note">
-      Every cathode is fitted against every anode, which takes a while.
-      Leave this tab open &mdash; the results appear when it finishes.
+    <div class="battery-cap"></div>
+  </div>
+  <div class="run-status-text">
+    <p class="run-status-title">Running the optimization</p>
+    <p class="run-status-note">
+      This takes a while. The results appear on their own when it finishes.
     </p>
   </div>
 </div>
 
 <script>
   (function () {
-    var overlay = document.getElementById('run-overlay');
+    var status = document.getElementById('run-status');
 
     function submitButtons() {
       return document.querySelectorAll('form.js-long-run [type="submit"]');
     }
 
     function show() {
-      overlay.classList.add('is-visible');
+      status.classList.add('is-visible');
       // After this tick, not during it: disabling the button that is
       // doing the submitting can drop its formaction on the way out.
-      // The overlay already covers the page, so nothing is clickable
-      // in the meantime — this is for the keyboard.
+      // Nothing covers the page any more, so these buttons going grey is
+      // the whole of what stops a second run being started on top of the
+      // first one.
       setTimeout(function () {
         submitButtons().forEach(function (b) { b.disabled = true; });
       }, 0);
@@ -51,11 +56,11 @@
     });
 
     // The back button can restore this page from the browser's cache
-    // exactly as it was left, overlay and all. Without this the user
+    // exactly as it was left, indicator and all. Without this the user
     // would be watching a run that finished long ago.
     window.addEventListener('pageshow', function (e) {
       if (e.persisted) {
-        overlay.classList.remove('is-visible');
+        status.classList.remove('is-visible');
         submitButtons().forEach(function (b) { b.disabled = false; });
       }
     });

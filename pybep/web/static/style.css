@@ -833,70 +833,82 @@ a.download-btn {
 
 /* A form POST leaves the browser on the old page with nothing to show for
    it, sometimes for most of a minute. This goes up when a run starts, and
-   the page that answers takes it away with the rest of the document. */
-.run-overlay {
+   the page that answers takes it away with the rest of the document.
+
+   A corner card rather than a cover: the page underneath stays readable
+   and usable for the whole of that minute, which is the point. */
+.run-status {
   display: none;
   position: fixed;
-  inset: 0;
+  right: 18px;
+  bottom: 18px;
   z-index: 50;
   align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(242, 246, 250, .9);
-  backdrop-filter: blur(2px);
-}
-.run-overlay.is-visible { display: flex; }
-
-.run-overlay-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  max-width: 420px;
-  padding: 38px 34px;
-  text-align: center;
+  gap: 14px;
+  max-width: min(360px, calc(100vw - 36px));
+  padding: 14px 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
+  /* Nothing in here is clickable, and it must not swallow a click meant
+     for the results it is sitting on top of. */
+  pointer-events: none;
 }
 
-.run-overlay-title {
+/* Slides in rather than appearing: in the corner of the eye, movement is
+   what gets noticed. */
+.run-status.is-visible {
+  display: flex;
+  animation: run-status-in .3s ease-out;
+}
+
+@keyframes run-status-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.run-status-title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   font-weight: 750;
   letter-spacing: -0.01em;
   color: var(--ink);
 }
-.run-overlay-note { margin: 0; font-size: 0.85rem; }
+.run-status-note {
+  margin: 3px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
 
 /* A battery charging: the body fills from the left in the logo's own
    gradient, and the bolt says what the filling means. Drawn here rather
    than shipped as a GIF so it takes its colours from the palette and
    stays sharp at any size. */
-.battery { display: flex; align-items: center; gap: 3px; }
+.battery { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
 
 .battery-body {
   position: relative;
-  width: 132px;
-  height: 62px;
-  border: 3px solid var(--ink);
-  border-radius: 13px;
+  width: 62px;
+  height: 30px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
   background: var(--surface);
   overflow: hidden;
 }
 
 .battery-cap {
-  width: 7px;
-  height: 24px;
-  border-radius: 0 4px 4px 0;
+  width: 4px;
+  height: 12px;
+  border-radius: 0 3px 3px 0;
   background: var(--ink);
 }
 
 .battery-fill {
   position: absolute;
-  inset: 5px;
-  border-radius: 7px;
+  inset: 3px;
+  border-radius: 4px;
   background: linear-gradient(90deg, var(--sky), var(--blue) 55%, var(--gold));
   transform-origin: left center;
   animation: battery-charge 2.4s ease-in-out infinite;
@@ -908,8 +920,8 @@ a.download-btn {
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 30px;
-  height: 30px;
+  width: 16px;
+  height: 16px;
   color: var(--ink);
   animation: battery-bolt 2.4s ease-in-out infinite;
 }
@@ -928,6 +940,7 @@ a.download-btn {
 /* A looping animation is the thing this setting exists to stop. The card
    still says what is happening, and the battery still reads as full. */
 @media (prefers-reduced-motion: reduce) {
+  .run-status.is-visible { animation: none; }
   .battery-fill, .battery-bolt { animation: none; }
   .battery-fill { transform: scaleX(1); }
   .battery-bolt { opacity: 1; }
