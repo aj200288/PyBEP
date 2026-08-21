@@ -1,5 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
+{# Refreshing means "put the page back the way it started", so a reload
+   goes to the empty panel instead of the graph. Coming back from another
+   tab is a plain navigation and keeps the results.
+
+   The browser reports how the page was loaded, so this is the reload
+   itself rather than a guess at one. It runs before the graph below is
+   parsed, which is why it sits at the top of the page. #}
+<script>
+  (function () {
+    var entry = performance.getEntriesByType
+                ? performance.getEntriesByType('navigation')[0] : null;
+    var reloaded = entry
+      ? entry.type === 'reload'
+      : !!(performance.navigation && performance.navigation.type === 1);
+    if (reloaded) {
+      window.location.replace('{{ url_for("main.index", reset=1) }}');
+    }
+  })();
+</script>
+
 {# The form keeps its place on the left, filled in with the choices that
    produced what is on the right. #}
 {% include "_run_form.html" %}

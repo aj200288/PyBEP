@@ -19,5 +19,14 @@
   <p class="file-hint">
     The optimization can take a while &mdash; leave this tab open while it runs.
   </p>
+
+  {# Refreshing sets a run aside rather than throwing it away, so there is
+     always a way back to one that was still wanted. #}
+  {% if hidden_results %}
+  <p class="file-hint">
+    Your last run is still here.
+    <a href="{{ url_for('main.index', restore=1) }}">Show it again</a>.
+  </p>
+  {% endif %}
 </section>
 {% endblock %}

@@ -128,7 +128,13 @@ def _session_workdir(key='workdir'):
     if not pipeline.is_session_workdir(workdir):
         return None
     real = os.path.realpath(workdir)
-    return real if os.path.isdir(real) else None
+    if not os.path.isdir(real):
+        return None
+    # Being used counts as being touched, which is what the six-hour
+    # sweep goes by. Every route that reaches a directory comes through
+    # here, so this is the one place that has to remember.
+    pipeline.touch_workdir(real)
+    return real
 
 
 def _safe_join(base, *parts):
@@ -187,9 +193,21 @@ def index():
     survive a look at Format Data or the instructions, a refresh, and the
     back button.
     """
+    if request.args.get('reset'):
+        # The results page asks for this when the browser tells it the
+        # load was a reload. Refreshing means "put it back the way it
+        # started", so the run is set aside — not deleted; the link on
+        # the empty panel brings it back, and /download still works.
+        session['results_hidden'] = True
+        return redirect(url_for('main.index'))
+    if request.args.get('restore'):
+        session.pop('results_hidden', None)
+        return redirect(url_for('main.index'))
+
     context = _form_context()
     workdir = _session_workdir()
     view = pipeline.load_result_view(workdir) if workdir else None
+
     if view is None:
         # Files can be sitting in the directory with no run behind them —
         # someone who pressed Continue and then walked away from the
@@ -197,6 +215,11 @@ def index():
         # something that has never run.
         context['carried'] = {curve_type: [] for curve_type in CURVE_TYPES}
         return render_template('index.html', **context)
+
+    if session.get('results_hidden'):
+        context['hidden_results'] = True
+        return render_template('index.html', **context)
+
     # What was computed wins over what the form is offering to do next.
     context.update(view)
     return render_template('results.html', **context)
@@ -430,6 +453,7 @@ def _run_and_store(files_meta, choices, settings, workdir):
     context['n_cathodes'] = len(cathodes)
     context['n_anodes'] = len(anodes)
     pipeline.save_result_view(workdir, context)
+    session.pop('results_hidden', None)
     return redirect(url_for('main.index'))
 
 

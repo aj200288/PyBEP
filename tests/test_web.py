@@ -13,6 +13,7 @@ import io
 import json
 import os
 import sys
+import time
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -712,7 +713,7 @@ def has_results(a_client):
 
 
 check("the results are at / straight after the run", has_results(sticky))
-check("and again on a plain refresh", has_results(sticky))
+check("and again on a second visit", has_results(sticky))
 sticky.get("/help")
 check("the instructions tab does not take them away", has_results(sticky))
 sticky.get("/format")
@@ -732,6 +733,47 @@ check("and the two flows keep their own directories",
       sticky.get(fmt_links[0]).status_code == 200
       and sticky.get("/download").status_code == 200,
       (sticky.get(fmt_links[0]).status_code, sticky.get("/download").status_code))
+
+# --- refreshing goes back to the starting instructions ----------------
+# The results page carries a script that spots a reload and sends the
+# browser to ?reset=1; there is no JavaScript here, so drive that URL
+# directly and check the script is on the page to drive it.
+page = sticky.get("/").get_data(as_text=True)
+check("the results page can tell a reload from a navigation",
+      "getEntriesByType" in page and "reset=1" in page,
+      [l.strip() for l in page.splitlines() if "reset" in l])
+
+r = sticky.get("/?reset=1", follow_redirects=True)
+empty = r.get_data(as_text=True)
+check("a refresh puts the starting instructions back",
+      'class="placeholder"' in empty and "Lowest RMSD" not in empty,
+      [l.strip() for l in empty.splitlines() if "placeholder" in l])
+check("the run is set aside, not thrown away",
+      "Show it again" in empty and sticky.get("/download").status_code == 200,
+      sticky.get("/download").status_code)
+check("and it stays put until asked for", not has_results(sticky))
+
+sticky.get("/?restore=1")
+check("showing it again brings back the same run", has_results(sticky))
+
+# A refresh must not outlive the run it was hiding.
+sticky.get("/?reset=1")
+sticky.post("/adjust", data={"iterations": "1", "slider_a": "0.6"})
+check("a new run is shown even if the last one was set aside",
+      has_results(sticky))
+
+# --- the six-hour idle clock -------------------------------------------
+# purge_stale_workdirs goes by the directory's mtime, and overwriting
+# result.json in place does not move it. Using the page has to.
+with sticky.session_transaction() as sess:
+    sticky_dir = sess["workdir"]
+old_clock = time.time() - 7 * 3600
+os.utime(sticky_dir, (old_clock, old_clock))
+check("the clock really was wound back",
+      time.time() - os.path.getmtime(sticky_dir) > 6 * 3600)
+sticky.get("/")
+idle = time.time() - os.path.getmtime(sticky_dir)
+check("simply using the page resets the idle clock", idle < 60, round(idle))
 
 # Pressing Continue and then walking away from the column-confirmation
 # step leaves uploads on disk with no run behind them.

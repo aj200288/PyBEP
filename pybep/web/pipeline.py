@@ -105,6 +105,22 @@ def purge_stale_workdirs(max_age=WORKDIR_MAX_AGE_SECONDS):
     return removed
 
 
+def touch_workdir(workdir):
+    """
+    Reset a session directory's idle clock.
+
+    purge_stale_workdirs goes by the directory's own mtime, and that only
+    moves when a file is created inside it — overwriting result.json in
+    place leaves it alone. Without this, a session that ran once at nine
+    and then spent the day adjusting sliders becomes eligible for deletion
+    at three, while somebody is still using it.
+    """
+    try:
+        os.utime(workdir, None)
+    except OSError:
+        pass  # already gone; the caller's next read will say so
+
+
 def create_session_workdir(existing_workdir=None):
     """
     Create a fresh temp working directory for one upload session, removing
