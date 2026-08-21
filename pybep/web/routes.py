@@ -24,6 +24,62 @@ bp = Blueprint('main', __name__)
 CURVE_TYPES = ('cathode', 'anode', 'battery')
 CANDIDATE_TYPES = ('cathode', 'anode')
 
+# What the sliders show before anything has been run: one pass, all the
+# weight on the OCV curve itself rather than its derivative.
+DEFAULT_SETTINGS = {'iterations': 1, 'battery_weight': 1.0,
+                    'derivative_weight': 0.0}
+
+
+def _previous_uploads():
+    """
+    The files this session has already uploaded, grouped by curve type.
+
+    A browser will not put a file back into a file input, so the form
+    always comes back with those boxes empty. Naming the files is the
+    difference between the user picking them again and quietly running
+    without them.
+    """
+    names = {curve_type: [] for curve_type in CURVE_TYPES}
+    for meta in session.get('files') or []:
+        if meta['curve_type'] in names and os.path.exists(meta['path']):
+            names[meta['curve_type']].append(pipeline.curve_label(meta['path']))
+    return names
+
+
+def _form_context(previous=False):
+    """
+    Everything the run form needs to render.
+
+    The form is the left-hand column of both the front page and the
+    results, so both routes need these values and building them in one
+    place is what stops the two pages disagreeing. `previous` fills the
+    form in from the last run — what the results page wants, so that
+    moving one slider and going again is a single click. The front page
+    leaves it False: arriving there means starting over.
+    """
+    if previous:
+        chosen = session.get('library') or {}
+        settings = session.get('settings') or DEFAULT_SETTINGS
+        battery_choice = session.get('battery_choice') or ''
+        carried = _previous_uploads()
+    else:
+        chosen, settings, battery_choice = {}, DEFAULT_SETTINGS, ''
+        carried = {curve_type: [] for curve_type in CURVE_TYPES}
+
+    return {
+        'max_iterations': current_app.config['MAX_ITERATIONS'],
+        'cathode_library': library_names('cathode'),
+        'anode_library': library_names('anode'),
+        'battery_library': battery_library_names(),
+        # None rather than [] when there is no previous run: the template
+        # reads that as "tick everything", which is the first-visit state.
+        'chosen_cathodes': chosen.get('cathode'),
+        'chosen_anodes': chosen.get('anode'),
+        'battery_choice': battery_choice,
+        'settings': settings,
+        'carried': carried,
+    }
+
 
 def _clamp_settings(form):
     """
@@ -124,12 +180,12 @@ def _chosen_library(field, curve_type):
 
 @bp.route('/')
 def index():
-    return render_template('index.html',
-                           max_iterations=current_app.config['MAX_ITERATIONS'],
-                           max_files=current_app.config['MAX_CURVE_FILES'],
-                           cathode_library=library_names('cathode'),
-                           anode_library=library_names('anode'),
-                           battery_library=battery_library_names())
+    """
+    The front page: the run form on the left, an empty results panel on
+    the right. This is also where "start over" lands, so the form shows
+    its defaults rather than whatever the last run used.
+    """
+    return render_template('index.html', **_form_context())
 
 
 @bp.route('/help')
@@ -305,12 +361,9 @@ def _run_and_render(files_meta, choices, settings, workdir):
     warnings = []
     errors = []
 
-    # Names what was actually decomposed: the library choice, or the
-    # uploaded file's own label once it parses. The results page has no
-    # other way to say which curve the answer belongs to.
-    battery_source = session.get('battery_choice')
-    if battery_source:
-        loaded = load_battery_library_curve(battery_source)
+    battery_name = session.get('battery_choice')
+    if battery_name:
+        loaded = load_battery_library_curve(battery_name)
         if loaded is not None:
             battery_soc, battery_ocv = loaded
 
@@ -325,7 +378,6 @@ def _run_and_render(files_meta, choices, settings, workdir):
 
             if meta['curve_type'] == 'battery':
                 battery_soc, battery_ocv = x, y
-                battery_source = label
             else:
                 target = cathodes if meta['curve_type'] == 'cathode' else anodes
                 label = _unique_key(label, target)
@@ -354,12 +406,13 @@ def _run_and_render(files_meta, choices, settings, workdir):
     # The uploads stay in the session's temp directory so /adjust can run
     # them again with different settings. They are wiped when the user
     # starts a new run (create_session_workdir) and never enter data/.
+
+    # The form is this page's left-hand column, so it needs the form's
+    # context too. The run's own values go on top: they describe what was
+    # actually computed, not what the form is offering to do next.
+    context.update(_form_context(previous=True))
     context['warnings'] = warnings
     context['settings'] = settings
-    # The results page carries the settings form itself, so it needs the
-    # same iteration ceiling the front page uses.
-    context['max_iterations'] = current_app.config['MAX_ITERATIONS']
-    context['battery_source'] = battery_source
     context['n_cathodes'] = len(cathodes)
     context['n_anodes'] = len(anodes)
     return render_template('results.html', **context)

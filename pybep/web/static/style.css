@@ -672,7 +672,7 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   box-shadow: var(--shadow);
 }
 
-.results-card h2, .rerun-panel h2 {
+.results-card h2, .placeholder h2 {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 750;
@@ -741,17 +741,36 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   word-break: break-word;
 }
 
-/* The settings, beside the results instead of on a page of their own.
-   .container is already a wrapping flex row, so this sits to the right of
-   the graph on a wide screen and drops underneath it on a narrow one,
-   with no media query in the way. */
-.rerun-panel {
-  flex: 0 0 auto;
-  width: min(330px, 100%);
-  padding: 24px 26px;
+/* The right-hand column before there is a run to put in it. Same
+   footprint as .graph-results, so the form does not shift sideways the
+   moment the first results arrive. */
+.placeholder {
+  flex: 1;
+  min-width: min(420px, 100%);
+  max-width: 760px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sunk);
+  padding: 38px 34px;
 }
 
-.rerun-panel h2 + p { margin: 6px 0 22px; font-size: 0.85rem; }
+.placeholder p { margin: 0 0 14px; }
+.placeholder p:last-child { margin-bottom: 0; }
+
+/* Names a file the form is unable to show, because browsers refuse to
+   refill a file input. Warm rather than red: nothing is wrong yet, but
+   pressing Continue without reading it would drop the file. */
+.carried-note {
+  display: block;
+  margin-top: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
 
 /* --- Banners --- */
 
