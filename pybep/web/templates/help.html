@@ -36,7 +36,7 @@
       {{ battery_library|length }} bundled measurements instead of
       &ldquo;Upload my own file&rdquo;.
     </li>
-    <li>Press <strong>Continue</strong>.</li>
+    <li>Press <strong>Run optimization</strong>.</li>
   </ol>
   <p>
     Nothing else needs touching: all {{ cathode_library|length }} cathodes and
@@ -143,7 +143,7 @@
     Download the numbers as JSON, CSV or Excel. All three describe the same run.
     JSON keeps full precision; Excel stores about 15 significant digits, so use
     JSON if the last digits matter. The form stays on the left while the results
-    appear beside it, so moving a slider and pressing <strong>Continue</strong>
+    appear beside it, so moving a slider and pressing <strong>Run optimization</strong>
     runs the same comparison again &mdash; the quick way to see how sensitive a
     result is to the weights.
   </p>
@@ -161,8 +161,9 @@
   </p>
   <p class="note">
     If you uploaded your own files, use <strong>Re-run with the same files</strong>
-    rather than Continue. No browser will put a file back into a file box, so the
-    upload fields come back empty &mdash; Continue would start a run without
+    rather than the main button. No browser will put a file back into a file
+    box, so the upload fields come back empty &mdash; running again from there
+    would start a run without
     them. The form says which files are still on the server.
   </p>
 

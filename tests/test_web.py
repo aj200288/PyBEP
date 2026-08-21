@@ -926,6 +926,21 @@ check("starting a run swaps the buttons for the battery, in place",
       and ".js-long-run.is-running .run-status" in css,
       rule.group(1).strip() if rule else "no .run-status rule")
 
+# Stop keeps the user's way out of a run open. It has to be a plain
+# button: type="submit" would start a second run and type="reset" would
+# empty the form, and neither of those is stopping anything.
+stop_button = re.search(r'<button[^>]*class="[^"]*run-stop[^"]*"[^>]*>', inside)
+check("a run can be stopped, by a button that submits nothing",
+      stop_button is not None and 'type="button"' in stop_button.group(0),
+      stop_button.group(0) if stop_button else "no stop button in the run form")
+
+# The heading, the tab and the button all name the same thing now, so the
+# button has to keep saying it.
+check("the button that starts a run says what it does",
+      '<button class="primary" type="submit">Run optimization</button>' in inside
+      and "Continue" not in inside,
+      [l.strip() for l in inside.splitlines() if "primary" in l][:2])
+
 # --- rejects bad input ------------------------------------------------
 resp = client.post("/format", data={
     "data_files": [(io.BytesIO(b"not data"), "notes.pdf")],

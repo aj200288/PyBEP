@@ -4,33 +4,44 @@
   which reads as "nothing happened" — so the submit that starts a run puts
   this up and the page that answers takes it away.
 
-  It goes where the button was: the buttons stand down and the battery
-  takes their place, so the answer to "did that do anything?" is in the
-  spot the user just clicked. Nothing else on the page moves, which leaves
-  the last graph and the notes on the data there to read while it works.
+  It goes where the buttons were: the battery stands in for the one that
+  was pressed and Stop takes the place of the one beside it, so the row
+  keeps its shape and the answer to "did that do anything?" is in the spot
+  the user just clicked. Nothing else on the page moves, which leaves the
+  last graph and the notes on the data there to read while it works.
 
   Belongs at the end of a form marked class="js-long-run" — that class is
   what the script below goes by, and the CSS hangs the swap off it. The
   download form on the results page deliberately does not carry it: it
   never navigates, so a battery raised for it would never come down.
 #}
-<div class="run-status" role="status" aria-live="polite">
-  <div class="run-status-bar">
-    <div class="battery" aria-hidden="true">
-      <div class="battery-body">
-        <div class="battery-fill"></div>
-        <svg class="battery-bolt" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 2v11h3v9l7-12h-4l4-8z"/>
-        </svg>
+<div class="run-status">
+  <div class="run-status-row">
+    <div class="run-status-bar" role="status" aria-live="polite">
+      <div class="battery" aria-hidden="true">
+        <div class="battery-body">
+          <div class="battery-fill"></div>
+          <svg class="battery-bolt" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 2v11h3v9l7-12h-4l4-8z"/>
+          </svg>
+        </div>
+        <div class="battery-cap"></div>
       </div>
-      <div class="battery-cap"></div>
+      <span class="run-status-title">Running the optimization</span>
     </div>
-    <span class="run-status-title">Running the optimization</span>
+    <button class="secondary run-stop" type="button">Stop</button>
   </div>
   <span class="run-status-note">
     This takes a while. The results appear on their own when it finishes.
   </span>
 </div>
+
+{# Outside the block above, because it is the one thing here that has to be
+   readable once the run is no longer going. #}
+<span class="run-stopped-note">
+  Stopped waiting. The server may still finish that run on its own &mdash;
+  starting another one writes over it.
+</span>
 
 <script>
   (function () {
@@ -40,8 +51,14 @@
       return document.querySelectorAll('form.js-long-run [type="submit"]');
     }
 
+    function stopWaiting(form) {
+      form.classList.remove('is-running');
+      submitButtons().forEach(function (b) { b.disabled = false; });
+    }
+
     forms.forEach(function (form) {
       form.addEventListener('submit', function () {
+        form.classList.remove('was-stopped');
         form.classList.add('is-running');
         // Hiding the button that is doing the submitting is safe; disabling
         // it is not, because a disabled submitter can lose its formaction on
@@ -52,16 +69,27 @@
           submitButtons().forEach(function (b) { b.disabled = true; });
         }, 0);
       });
+
+      form.querySelectorAll('.run-stop').forEach(function (button) {
+        button.addEventListener('click', function () {
+          // The browser's own stop button, in effect: it drops the request
+          // this page is waiting on and hands the form back. What it cannot
+          // do is call the run off — the server has no way of being told to
+          // abandon a job it has already started, so that one finishes by
+          // itself and the next run writes over its results. The note below
+          // says so rather than letting it come as a surprise.
+          window.stop();
+          stopWaiting(form);
+          form.classList.add('was-stopped');
+        });
+      });
     });
 
     // The back button can restore this page from the browser's cache exactly
     // as it was left, mid-run battery and all. Without this the user would be
     // watching a run that finished long ago, with no way back to the buttons.
     window.addEventListener('pageshow', function (e) {
-      if (e.persisted) {
-        forms.forEach(function (form) { form.classList.remove('is-running'); });
-        submitButtons().forEach(function (b) { b.disabled = false; });
-      }
+      if (e.persisted) forms.forEach(stopWaiting);
     });
   })();
 </script>

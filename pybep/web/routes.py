@@ -224,7 +224,7 @@ def index():
 
     if view is None:
         # Files can be sitting in the directory with no run behind them —
-        # someone who pressed Continue and then walked away from the
+        # someone who started a run and then walked away from the
         # column-confirmation step. Offering to re-run those would offer
         # something that has never run.
         context['carried'] = {curve_type: [] for curve_type in CURVE_TYPES}

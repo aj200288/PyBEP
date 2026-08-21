@@ -129,7 +129,7 @@
     {% endwith %}
 
     <div class="actions">
-      <button class="primary" type="submit">Continue</button>
+      <button class="primary" type="submit">Run optimization</button>
       <button class="secondary" type="reset" onclick="setTimeout(syncSliderLabels, 0)">Reset</button>
     </div>
 
@@ -137,7 +137,7 @@
     {# Sends the settings above straight to /adjust, which re-runs the curves
        already saved for this session. formnovalidate is not optional: the
        battery file input is empty and marked required, and would otherwise
-       block this button along with Continue. #}
+       block this button along with Run optimization. #}
     <div class="actions">
       <button class="secondary" type="submit" formnovalidate
               formaction="{{ url_for('main.adjust') }}">
@@ -147,7 +147,7 @@
     {% endif %}
 
     {# Last in the form on purpose: with the buttons above it hidden, this
-       comes to rest exactly where Continue was. #}
+       comes to rest exactly where they were. #}
     {% include "_running.html" %}
   </form>
 

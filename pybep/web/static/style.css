@@ -759,7 +759,7 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 
 /* Names a file the form is unable to show, because browsers refuse to
    refill a file input. Warm rather than red: nothing is wrong yet, but
-   pressing Continue without reading it would drop the file. */
+   running again without reading it would drop the file. */
 .carried-note {
   display: block;
   margin-top: 9px;
@@ -840,15 +840,26 @@ a.download-btn {
    In the button's place rather than over the page: the last graph and the
    numbers beside it stay readable for the whole of that minute, which is
    the only thing worth doing while waiting. */
-.run-status { display: none; }
+.run-status, .run-stopped-note { display: none; }
 
 .js-long-run.is-running .actions,
 .js-long-run.is-running .run-hint { display: none; }
 .js-long-run.is-running .run-status { display: block; }
+.js-long-run.was-stopped .run-stopped-note { display: block; }
+
+/* The same row, keeping its shape: the battery takes the width the button
+   that was pressed had, and Stop stands where its neighbour was. */
+.run-status-row {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 
 /* Shaped like the button it stands in for — same height, same corners —
    so the swap reads as one control changing rather than the form jumping. */
 .run-status-bar {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -859,14 +870,18 @@ a.download-btn {
   background: var(--sky-wash);
 }
 
+/* Buttons are flex: 1, which would hand Stop half the row. */
+.run-stop { flex: 0 0 auto; }
+
 .run-status-title {
   font-size: 0.9rem;
   font-weight: 650;
   color: var(--ink);
 }
 
-.run-status-note {
-  display: block;
+.run-status-note { display: block; }
+
+.run-status-note, .run-stopped-note {
   margin-top: 8px;
   font-size: 0.8rem;
   line-height: 1.45;
