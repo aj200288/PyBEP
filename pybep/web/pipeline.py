@@ -284,6 +284,43 @@ def run_optimization(cathodes, anodes, battery_soc, battery_ocv, settings,
     }
 
 
+RESULT_VIEW = 'result_view.json'
+
+
+def save_result_view(workdir, context):
+    """
+    Keep everything the results page needs on disk.
+
+    The page is reached by redirect after a run, and again every time the
+    user comes back to it from another tab, so these values have to
+    outlive the request that produced them. The graph alone is some 40 kB
+    of base64, which rules out the session cookie; this file sits beside
+    result.json and dies with the session's directory.
+    """
+    with open(os.path.join(workdir, RESULT_VIEW), 'w', encoding='utf-8') as f:
+        json.dump(context, f)
+
+
+def load_result_view(workdir):
+    """
+    The stored results for this session, or None if there are none.
+
+    A missing or half-written file means "nothing to show" rather than an
+    error: the page it feeds simply falls back to its empty state.
+    """
+    try:
+        with open(os.path.join(workdir, RESULT_VIEW), encoding='utf-8') as f:
+            view = json.load(f)
+    except (OSError, ValueError):
+        return None
+    # JSON has no tuples, and the optimizer's best parameters are one.
+    # Without this the page would read [1, 701, 82, 982] where the desktop
+    # app and every earlier version of this page read (1, 701, 82, 982).
+    if isinstance(view.get('best_parameters'), list):
+        view['best_parameters'] = tuple(view['best_parameters'])
+    return view
+
+
 FORMATTED_DIR = 'formatted'
 
 # Both the writer below and the route that serves the file derive the

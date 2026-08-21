@@ -240,9 +240,12 @@ for fid in file_ids:
     form[f"ocv_{fid}"] = "1"
 
 resp = client.post("/confirm", data=form)
-check("confirm -> results page", resp.status_code == 200, resp.status_code)
-body = resp.get_data(as_text=True)
-check("results page shows the plot", 'src="data:image/png;base64,' in body)
+check("confirm redirects rather than answering with the results",
+      resp.status_code == 302 and resp.headers["Location"].endswith("/"),
+      (resp.status_code, resp.headers.get("Location")))
+body = client.get("/").get_data(as_text=True)
+check("the results are waiting at / afterwards",
+      'src="data:image/png;base64,' in body)
 check("results page shows RMSD", "Lowest RMSD" in body)
 
 # The reported ID must be the user's own filename, exactly as the desktop
@@ -296,7 +299,9 @@ from pybep.core import library_names  # noqa: E402
 lib_cathodes = library_names("cathode")
 lib_anodes = library_names("anode")
 
-body = client.get("/").get_data(as_text=True)
+# Its own client: `client` has results by now, and / shows them.
+fresh = app.test_client()
+body = fresh.get("/").get_data(as_text=True)
 check("front page lists every built-in cathode",
       all(n in body for n in lib_cathodes), lib_cathodes)
 check("front page lists every built-in anode",
@@ -333,7 +338,7 @@ check("candidate uploads are optional now",
       and "required" not in file_inputs["anode_files"],
       file_inputs["cathode_files"])
 
-resp = client.get(f"/curve/cathode/{lib_cathodes[0]}")
+resp = fresh.get(f"/curve/cathode/{lib_cathodes[0]}")
 check("curve preview returns a PNG",
       resp.status_code == 200 and resp.data[:8] == b"\x89PNG\r\n\x1a\n",
       (resp.status_code, resp.data[:8]))
@@ -358,7 +363,8 @@ lib_ids = re.findall(r'name="soc_([0-9a-f]{32})"', body)
 check("only the uploaded battery file needs confirming", len(lib_ids) == 1, len(lib_ids))
 
 resp = client.post("/confirm", data={f"soc_{lib_ids[0]}": "0",
-                                     f"ocv_{lib_ids[0]}": "1"})
+                                     f"ocv_{lib_ids[0]}": "1"},
+                   follow_redirects=True)
 check("library-only run produces results", resp.status_code == 200, resp.status_code)
 body = resp.get_data(as_text=True)
 check("library-only run reports a built-in cathode as the winner",
@@ -446,7 +452,7 @@ check("every advertised format downloads",
 from pybep.core import battery_library_names  # noqa: E402
 
 lib_batteries = battery_library_names()
-home = client.get("/").get_data(as_text=True)
+home = fresh.get("/").get_data(as_text=True)
 options = re.findall(r'<option value="([^"]*)"', home)
 check("the battery dropdown offers upload first, then every bundled curve",
       options[0] == "" and options[1:] == lib_batteries,
@@ -460,11 +466,11 @@ resp = client.post("/upload", data={
     "slider_a": "1",
 }, content_type="multipart/form-data")
 check("an all-library run skips the confirm step entirely",
-      resp.status_code == 200 and "Confirm columns" not in resp.get_data(as_text=True),
-      resp.status_code)
-body = resp.get_data(as_text=True)
+      resp.status_code == 302, resp.status_code)
+body = client.get("/").get_data(as_text=True)
 check("an all-library run goes straight to results",
-      'src="data:image/png;base64,' in body and "Lowest RMSD" in body)
+      "Confirm columns" not in body
+      and 'src="data:image/png;base64,' in body and "Lowest RMSD" in body)
 compared = re.search(r"(\d+) cathode\(s\) (?:&times;|×) (\d+) anode\(s\)", body)
 check("the whole library was compared",
       compared.groups() == (str(len(lib_cathodes)), str(len(lib_anodes))),
@@ -494,7 +500,8 @@ resp = client.post("/upload", data={
     "slider_a": "0.35",
 }, content_type="multipart/form-data")
 fid = re.findall(r'name="soc_([0-9a-f]{32})"', resp.get_data(as_text=True))[0]
-body = client.post("/confirm", data={f"soc_{fid}": "0", f"ocv_{fid}": "1"}) \
+body = client.post("/confirm", data={f"soc_{fid}": "0", f"ocv_{fid}": "1"},
+                   follow_redirects=True) \
              .get_data(as_text=True)
 check("the whole run form comes back beside the results",
       'action="/upload"' in body and 'id="battery_choice"' in body,
@@ -527,7 +534,8 @@ with client.session_transaction() as sess:
 check("the uploaded file survives so it can be reused",
       os.path.isdir(os.path.join(workdir, "battery")), workdir)
 
-resp = client.post("/adjust", data={"iterations": "3", "slider_a": "0.4"})
+resp = client.post("/adjust", data={"iterations": "3", "slider_a": "0.4"},
+                   follow_redirects=True)
 body = resp.get_data(as_text=True)
 check("re-running produces fresh results", resp.status_code == 200
       and 'src="data:image/png;base64,' in body, resp.status_code)
@@ -547,7 +555,7 @@ lib_only = client.post("/upload", data={
     "library_cathodes": [lib_cathodes[0]],
     "library_anodes": [lib_anodes[0]],
     "iterations": "1",
-}, content_type="multipart/form-data").get_data(as_text=True)
+}, content_type="multipart/form-data", follow_redirects=True).get_data(as_text=True)
 check("a new run wipes the previous run's uploads",
       not os.path.isdir(old_workdir), old_workdir)
 check("a library-only run has nothing to carry, so offers no extra re-run",
@@ -683,6 +691,58 @@ if os.path.exists(indexed):
               len(rows3) == 1001 and abs(float(first[0])) < 1e-6
               and abs(float(last[0]) - 1) < 1e-6 and 2.4 < float(first[1]) < 2.6,
               (len(rows3), first, last))
+
+# --- results stay put while you look at the other tabs -----------------
+# One run, then nothing but navigation. None of it is allowed to lose the
+# answer, which is why a run redirects to a page that reads the results
+# back off disk instead of rendering them into the POST response.
+sticky = app.test_client()
+r = sticky.post("/upload", content_type="multipart/form-data", data={
+    "battery_choice": lib_batteries[0],
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1", "slider_a": "0.5"})
+check("a run answers with a redirect, not with the page itself",
+      r.status_code == 302, r.status_code)
+
+
+def has_results(a_client):
+    body = a_client.get("/").get_data(as_text=True)
+    return 'src="data:image/png;base64,' in body and "Lowest RMSD" in body
+
+
+check("the results are at / straight after the run", has_results(sticky))
+check("and again on a plain refresh", has_results(sticky))
+sticky.get("/help")
+check("the instructions tab does not take them away", has_results(sticky))
+sticky.get("/format")
+check("nor does opening Format Data", has_results(sticky))
+
+# Format Data used to share, and wipe, the directory the results live in.
+r = sticky.post("/format", content_type="multipart/form-data",
+                data={"data_files": [upload_file(cathode)],
+                      "curve_type": "cathode"})
+check("a format job still runs alongside a result", r.status_code == 200,
+      r.status_code)
+r = sticky.post("/format/confirm", data={"soc_0": "0", "ocv_0": "1"})
+fmt_links = re.findall(r'href="(/format/file/\d+)"', r.get_data(as_text=True))
+check("the formatted file is offered for download", len(fmt_links) == 1, fmt_links)
+check("running a format job leaves the results alone", has_results(sticky))
+check("and the two flows keep their own directories",
+      sticky.get(fmt_links[0]).status_code == 200
+      and sticky.get("/download").status_code == 200,
+      (sticky.get(fmt_links[0]).status_code, sticky.get("/download").status_code))
+
+# The stored view is JSON, and JSON has no tuples: without a conversion on
+# the way back the page would read [1, 701, 82, 982] where PyBEP has
+# always read (1, 701, 82, 982).
+# Not `body`: a check further down still wants the format page held there.
+sticky_page = sticky.get("/").get_data(as_text=True)
+params = re.search(r'Best parameters:.*?<span class="value">([^<]+)',
+                   sticky_page, re.S)
+check("the best parameters still read as a tuple after the round trip",
+      params is not None and params.group(1).strip().startswith("("),
+      params.group(1).strip() if params else "no 'Best parameters' row")
 
 # --- recovering instead of crashing -----------------------------------
 # Both of these were 500s: a run whose battery file failed to parse, and a

@@ -46,26 +46,18 @@ def _previous_uploads():
     return names
 
 
-def _form_context(previous=False):
+def _form_context():
     """
-    Everything the run form needs to render.
+    Everything the run form needs to render, filled in from whatever this
+    session has done so far.
 
-    The form is the left-hand column of both the front page and the
-    results, so both routes need these values and building them in one
-    place is what stops the two pages disagreeing. `previous` fills the
-    form in from the last run — what the results page wants, so that
-    moving one slider and going again is a single click. The front page
-    leaves it False: arriving there means starting over.
+    The form is the left-hand column of the run page whether or not there
+    are results beside it, so building its values in one place is what
+    stops the two states disagreeing. A session that has run nothing
+    yields the first-visit form: every curve ticked, defaults on the
+    sliders.
     """
-    if previous:
-        chosen = session.get('library') or {}
-        settings = session.get('settings') or DEFAULT_SETTINGS
-        battery_choice = session.get('battery_choice') or ''
-        carried = _previous_uploads()
-    else:
-        chosen, settings, battery_choice = {}, DEFAULT_SETTINGS, ''
-        carried = {curve_type: [] for curve_type in CURVE_TYPES}
-
+    chosen = session.get('library') or {}
     return {
         'max_iterations': current_app.config['MAX_ITERATIONS'],
         'cathode_library': library_names('cathode'),
@@ -75,9 +67,9 @@ def _form_context(previous=False):
         # reads that as "tick everything", which is the first-visit state.
         'chosen_cathodes': chosen.get('cathode'),
         'chosen_anodes': chosen.get('anode'),
-        'battery_choice': battery_choice,
-        'settings': settings,
-        'carried': carried,
+        'battery_choice': session.get('battery_choice') or '',
+        'settings': session.get('settings') or dict(DEFAULT_SETTINGS),
+        'carried': _previous_uploads(),
     }
 
 
@@ -118,15 +110,21 @@ def _clamp_settings(form):
     }
 
 
-def _session_workdir():
+def _session_workdir(key='workdir'):
     """
-    This session's working directory, or None if there isn't a usable one.
+    One of this session's working directories, or None if there isn't a
+    usable one.
+
+    There are two: 'workdir' holds the optimization's uploads and results,
+    'format_workdir' holds Format Data's. Keeping them apart is what lets
+    someone format a file without deleting the results they are still
+    looking at.
 
     The path is checked rather than taken at face value: it arrives from a
     cookie, and the routes below hand it to send_file. Belt and braces
     alongside a strong SECRET_KEY.
     """
-    workdir = session.get('workdir')
+    workdir = session.get(key)
     if not pipeline.is_session_workdir(workdir):
         return None
     real = os.path.realpath(workdir)
@@ -181,11 +179,22 @@ def _chosen_library(field, curve_type):
 @bp.route('/')
 def index():
     """
-    The front page: the run form on the left, an empty results panel on
-    the right. This is also where "start over" lands, so the form shows
-    its defaults rather than whatever the last run used.
+    The run page: the form on the left, and on the right either the last
+    results or an empty panel waiting for them.
+
+    The results are read back from the session's directory rather than
+    held in the request that computed them, which is what lets them
+    survive a look at Format Data or the instructions, a refresh, and the
+    back button.
     """
-    return render_template('index.html', **_form_context())
+    context = _form_context()
+    workdir = _session_workdir()
+    view = pipeline.load_result_view(workdir) if workdir else None
+    if view is None:
+        return render_template('index.html', **context)
+    # What was computed wins over what the form is offering to do next.
+    context.update(view)
+    return render_template('results.html', **context)
 
 
 @bp.route('/help')
@@ -284,7 +293,7 @@ def upload():
         # confirm — go straight to the answer instead of showing an
         # empty confirmation page.
         session['choices'] = {}
-        return _run_and_render(files_meta, {}, session['settings'], workdir)
+        return _run_and_store(files_meta, {}, session['settings'], workdir)
 
     return render_template('confirm.html', previews=previews, errors=errors)
 
@@ -311,7 +320,7 @@ def confirm():
 
     # Kept so /adjust can re-run without asking about columns again.
     session['choices'] = choices
-    return _run_and_render(files_meta, choices, settings, workdir)
+    return _run_and_store(files_meta, choices, settings, workdir)
 
 
 @bp.route('/adjust', methods=['POST'])
@@ -339,17 +348,22 @@ def adjust():
 
     settings = _clamp_settings(request.form)
     session['settings'] = settings
-    return _run_and_render(files_meta, session.get('choices') or {},
-                           settings, workdir)
+    return _run_and_store(files_meta, session.get('choices') or {},
+                          settings, workdir)
 
 
-def _run_and_render(files_meta, choices, settings, workdir):
+def _run_and_store(files_meta, choices, settings, workdir):
     """
     Assemble the candidates (library selection plus any confirmed uploads),
-    run the optimization and render the results.
+    run the optimization, save what it produced and send the browser to
+    the page that shows it.
 
     Shared by /confirm and by /upload, which skips the confirmation step
     when every curve came from the library and there is nothing to confirm.
+
+    Redirecting rather than rendering is what makes the results stick: the
+    page the user lands on is a plain GET of "/", so it can be refreshed,
+    gone back to, and returned to from another tab.
     """
 
     # Start from the library selection made on the front page, then layer
@@ -406,16 +420,12 @@ def _run_and_render(files_meta, choices, settings, workdir):
     # The uploads stay in the session's temp directory so /adjust can run
     # them again with different settings. They are wiped when the user
     # starts a new run (create_session_workdir) and never enter data/.
-
-    # The form is this page's left-hand column, so it needs the form's
-    # context too. The run's own values go on top: they describe what was
-    # actually computed, not what the form is offering to do next.
-    context.update(_form_context(previous=True))
     context['warnings'] = warnings
     context['settings'] = settings
     context['n_cathodes'] = len(cathodes)
     context['n_anodes'] = len(anodes)
-    return render_template('results.html', **context)
+    pipeline.save_result_view(workdir, context)
+    return redirect(url_for('main.index'))
 
 
 @bp.route('/curve/<curve_type>/<name>')
@@ -477,11 +487,10 @@ def format_run():
         flash(f"Please format at most {max_files} files at a time.", "error")
         return redirect(url_for('main.format_form'))
 
-    workdir = pipeline.create_session_workdir(session.get('workdir'))
-    session['workdir'] = workdir
-    # A format run invalidates any earlier optimization in this session.
-    for key in ('files', 'settings', 'choices', 'library', 'battery_choice'):
-        session.pop(key, None)
+    # Its own directory, not the optimization's: formatting a file must
+    # not delete a result the user still has open in the other tab.
+    workdir = pipeline.create_session_workdir(session.get('format_workdir'))
+    session['format_workdir'] = workdir
 
     try:
         previews, rejected = pipeline.save_format_uploads(files, curve_type, workdir)
@@ -509,7 +518,7 @@ def format_run():
 @bp.route('/format/confirm', methods=['POST'])
 def format_confirm():
     state = session.get('format')
-    workdir = _session_workdir()
+    workdir = _session_workdir('format_workdir')
 
     if not state or not workdir:
         flash("Your session expired, please choose the files again.", "error")
@@ -549,7 +558,7 @@ def format_file(index):
     produced, so a URL can only ever reach that session's own output.
     """
     outputs = session.get('format_outputs') or []
-    workdir = _session_workdir()
+    workdir = _session_workdir('format_workdir')
     if not workdir or not 0 <= index < len(outputs):
         abort(404)
 
@@ -571,7 +580,7 @@ def format_download():
     out of the cookie, so this route can only ever serve that session's
     zip — the same rule /download and /format/file follow.
     """
-    workdir = _session_workdir()
+    workdir = _session_workdir('format_workdir')
     path = _safe_join(workdir, pipeline.FORMATTED_ZIP) if workdir else None
     if not path or not os.path.isfile(path):
         abort(404)
