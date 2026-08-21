@@ -762,6 +762,36 @@ sticky.post("/adjust", data={"iterations": "1", "slider_a": "0.6"})
 check("a new run is shown even if the last one was set aside",
       has_results(sticky))
 
+# Back to the start means the whole page: the form beside the results
+# still held the battery curve and the sliders that produced them.
+sticky.post("/adjust", data={"iterations": "3", "slider_a": "0.25"})
+shown = sticky.get("/").get_data(as_text=True)
+check("the form beside a run describes that run",
+      'value="3" name="iterations"' in shown
+      and 'value="0.25" name="slider_a"' in shown
+      and f'<option value="{lib_batteries[0]}" selected>' in shown,
+      re.findall(r'<input id="slider-\w+"[^>]*value="[^"]*"[^>]*>', shown))
+check("the logo starts over, the way the refresh button does",
+      'class="brand" href="/?reset=1"' in shown,
+      [l.strip() for l in shown.splitlines() if 'class="brand"' in l])
+
+was_reset = sticky.get("/?reset=1", follow_redirects=True).get_data(as_text=True)
+check("resetting puts the battery curve back to its default position",
+      '<option value="" selected>' in was_reset
+      and f'<option value="{lib_batteries[0]}" selected>' not in was_reset,
+      [l.strip() for l in was_reset.splitlines() if "selected" in l][:3])
+check("and the sliders with it",
+      'value="1" name="iterations"' in was_reset
+      and 'value="1.0" name="slider_a"' in was_reset,
+      re.findall(r'<input id="slider-\w+"[^>]*value="[^"]*"[^>]*>', was_reset))
+
+back = sticky.get("/?restore=1", follow_redirects=True).get_data(as_text=True)
+check("showing the run again brings its settings back with it",
+      'value="3" name="iterations"' in back
+      and 'value="0.25" name="slider_a"' in back
+      and f'<option value="{lib_batteries[0]}" selected>' in back,
+      re.findall(r'<input id="slider-\w+"[^>]*value="[^"]*"[^>]*>', back))
+
 # --- the six-hour idle clock -------------------------------------------
 # purge_stale_workdirs goes by the directory's mtime, and overwriting
 # result.json in place does not move it. Using the page has to.

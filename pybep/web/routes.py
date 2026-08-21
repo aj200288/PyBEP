@@ -46,18 +46,30 @@ def _previous_uploads():
     return names
 
 
-def _form_context():
+def _form_context(from_session=True):
     """
-    Everything the run form needs to render, filled in from whatever this
-    session has done so far.
+    Everything the run form needs to render.
 
-    The form is the left-hand column of the run page whether or not there
-    are results beside it, so building its values in one place is what
-    stops the two states disagreeing. A session that has run nothing
-    yields the first-visit form: every curve ticked, defaults on the
-    sliders.
+    By default it is filled in from whatever this session has done, so the
+    form standing beside a set of results describes the run that produced
+    them. A session that has run nothing gets the first-visit form anyway:
+    every curve ticked, defaults on the sliders.
+
+    from_session=False asks for that first-visit form outright, which is
+    what a page that has been reset shows — otherwise "back to the start"
+    would mean only the panel on the right, leaving the battery curve and
+    the sliders still set to the run that is no longer on screen.
     """
-    chosen = session.get('library') or {}
+    if from_session:
+        chosen = session.get('library') or {}
+        battery_choice = session.get('battery_choice') or ''
+        settings = session.get('settings') or DEFAULT_SETTINGS
+        carried = _previous_uploads()
+    else:
+        chosen, battery_choice = {}, ''
+        settings = DEFAULT_SETTINGS
+        carried = {curve_type: [] for curve_type in CURVE_TYPES}
+
     return {
         'max_iterations': current_app.config['MAX_ITERATIONS'],
         'cathode_library': library_names('cathode'),
@@ -67,9 +79,11 @@ def _form_context():
         # reads that as "tick everything", which is the first-visit state.
         'chosen_cathodes': chosen.get('cathode'),
         'chosen_anodes': chosen.get('anode'),
-        'battery_choice': session.get('battery_choice') or '',
-        'settings': session.get('settings') or dict(DEFAULT_SETTINGS),
-        'carried': _previous_uploads(),
+        'battery_choice': battery_choice,
+        # A copy: a caller that ever edited what it was handed would
+        # otherwise rewrite the defaults for every session in the process.
+        'settings': dict(settings),
+        'carried': carried,
     }
 
 
@@ -217,6 +231,9 @@ def index():
         return render_template('index.html', **context)
 
     if session.get('results_hidden'):
+        # Reset by a refresh or by the logo, so the whole page reads as it
+        # did before anything ran — the form included.
+        context = _form_context(from_session=False)
         context['hidden_results'] = True
         return render_template('index.html', **context)
 

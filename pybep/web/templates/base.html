@@ -9,7 +9,10 @@
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="{{ url_for('main.index') }}">
+    {# The mark starts over, the way a refresh does. The tabs beside it
+       go to a section without disturbing a run in progress. #}
+    <a class="brand" href="{{ url_for('main.index', reset=1) }}"
+       title="Start over">
       <img class="brand-mark" src="{{ url_for('static', filename='logo.png') }}"
            alt="PyBEP logo"/>
       <span class="brand-text">
