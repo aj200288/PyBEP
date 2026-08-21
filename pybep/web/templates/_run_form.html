@@ -130,7 +130,7 @@
 
     <div class="actions">
       <button class="primary" type="submit">Run optimization</button>
-      <button class="secondary" type="reset" onclick="setTimeout(syncSliderLabels, 0)">Reset</button>
+      <button class="secondary" type="reset">Reset</button>
     </div>
 
     {% if has_carried %}
@@ -190,6 +190,25 @@
       document.querySelectorAll(`input[name="${field}"]`)
               .forEach(box => box.addEventListener('change', () => updateCount(field)));
       updateCount(field);
+    });
+
+    // Reset means "the way a first visit finds it", and the browser's own
+    // reset does not get there after a run: it goes back to the values
+    // written into the HTML, which are the choices that produced the
+    // results on the right. So it would hand back the battery curve just
+    // used rather than the top of the list. Put that one there by hand.
+    //
+    // Deferred by a tick, because the reset event fires before the
+    // controls are reset — anything set during it would be undone. The
+    // labels and counts have to be redrawn for the same reason: a reset
+    // moves the sliders and the ticks without firing input or change.
+    document.getElementById('battery_choice').form.addEventListener('reset', () => {
+      setTimeout(() => {
+        document.getElementById('battery_choice').value = '';
+        toggleBatteryUpload();
+        syncSliderLabels();
+        CANDIDATE_FIELDS.forEach(field => updateCount(field));
+      }, 0);
     });
   </script>
 </main>

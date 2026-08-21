@@ -785,6 +785,14 @@ check("and the sliders with it",
       and 'value="1.0" name="slider_a"' in was_reset,
       re.findall(r'<input id="slider-\w+"[^>]*value="[^"]*"[^>]*>', was_reset))
 
+# The Reset button has the same job and cannot leave it to the browser: a
+# native reset goes back to the values in the HTML, which after a run are
+# the curve that produced the results rather than the top of the list.
+check("the Reset button puts the battery curve back to its default too",
+      "addEventListener('reset'" in shown
+      and "getElementById('battery_choice').value = ''" in shown,
+      [l.strip() for l in shown.splitlines() if "reset'" in l][:3])
+
 back = sticky.get("/?restore=1", follow_redirects=True).get_data(as_text=True)
 check("showing the run again brings its settings back with it",
       'value="3" name="iterations"' in back
