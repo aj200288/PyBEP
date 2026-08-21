@@ -832,53 +832,45 @@ a.download-btn {
 /* --- While a run is going --- */
 
 /* A form POST leaves the browser on the old page with nothing to show for
-   it, sometimes for most of a minute. This goes up when a run starts, and
-   the page that answers takes it away with the rest of the document.
+   it, sometimes for most of a minute. The buttons stand down when a run
+   starts and the battery takes their place, so the sign that something is
+   happening is in the spot that was just clicked. The page that answers
+   the POST clears it away with the rest of the document.
 
-   A corner card rather than a cover: the page underneath stays readable
-   and usable for the whole of that minute, which is the point. */
-.run-status {
-  display: none;
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 50;
-  align-items: center;
-  gap: 14px;
-  max-width: min(360px, calc(100vw - 36px));
-  padding: 14px 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  /* Nothing in here is clickable, and it must not swallow a click meant
-     for the results it is sitting on top of. */
-  pointer-events: none;
-}
+   In the button's place rather than over the page: the last graph and the
+   numbers beside it stay readable for the whole of that minute, which is
+   the only thing worth doing while waiting. */
+.run-status { display: none; }
 
-/* Slides in rather than appearing: in the corner of the eye, movement is
-   what gets noticed. */
-.run-status.is-visible {
+.js-long-run.is-running .actions,
+.js-long-run.is-running .run-hint { display: none; }
+.js-long-run.is-running .run-status { display: block; }
+
+/* Shaped like the button it stands in for — same height, same corners —
+   so the swap reads as one control changing rather than the form jumping. */
+.run-status-bar {
   display: flex;
-  animation: run-status-in .3s ease-out;
-}
-
-@keyframes run-status-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: none; }
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--sky-wash);
 }
 
 .run-status-title {
-  margin: 0;
   font-size: 0.9rem;
-  font-weight: 750;
-  letter-spacing: -0.01em;
+  font-weight: 650;
   color: var(--ink);
 }
+
 .run-status-note {
-  margin: 3px 0 0;
-  font-size: 0.78rem;
-  line-height: 1.4;
+  display: block;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: center;
   color: var(--muted);
 }
 
@@ -890,17 +882,17 @@ a.download-btn {
 
 .battery-body {
   position: relative;
-  width: 62px;
-  height: 30px;
+  width: 56px;
+  height: 24px;
   border: 2px solid var(--ink);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--surface);
   overflow: hidden;
 }
 
 .battery-cap {
   width: 4px;
-  height: 12px;
+  height: 10px;
   border-radius: 0 3px 3px 0;
   background: var(--ink);
 }
@@ -920,8 +912,8 @@ a.download-btn {
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: var(--ink);
   animation: battery-bolt 2.4s ease-in-out infinite;
 }
@@ -940,7 +932,6 @@ a.download-btn {
 /* A looping animation is the thing this setting exists to stop. The card
    still says what is happening, and the battery still reads as full. */
 @media (prefers-reduced-motion: reduce) {
-  .run-status.is-visible { animation: none; }
   .battery-fill, .battery-bolt { animation: none; }
   .battery-fill { transform: scaleX(1); }
   .battery-bolt { opacity: 1; }

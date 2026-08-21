@@ -886,8 +886,9 @@ running_pages["the confirm page"] = conf.post(
           "iterations": "1"}).get_data(as_text=True)
 
 for where, page in running_pages.items():
-    check(f"{where} carries exactly one running indicator",
-          page.count('id="run-status"') == 1, page.count('id="run-status"'))
+    check(f"{where} carries exactly one running battery",
+          page.count('class="run-status"') == 1,
+          page.count('class="run-status"'))
     check(f"{where} marks its run form as a long job",
           re.search(r'<form class="[^"]*js-long-run[^"]*" method="POST"'
                     r' action="/(?:upload|confirm)"', page) is not None,
@@ -901,22 +902,29 @@ check("the download form is deliberately not marked",
       download_form is not None and "js-long-run" not in download_form.group(0),
       download_form.group(0) if download_form else "no download form")
 
-check("the indicator starts hidden and has something to show when it is not",
-      'class="run-status"' in running_pages["the front page"]
-      and "is-visible" in running_pages["the front page"]
-      and "battery-fill" in running_pages["the front page"])
+# The battery stands in for the button, so it has to be inside the form
+# and below the buttons it replaces — anywhere else and it would appear
+# somewhere other than where the click landed.
+run_form = re.search(r'<form class="[^"]*js-long-run.*?</form>',
+                     running_pages["the front page"], re.S)
+inside = run_form.group(0) if run_form else ""
+check("the battery sits in the run form, after the buttons it stands in for",
+      'class="run-status"' in inside and 'class="actions"' in inside
+      and inside.rindex('class="actions"') < inside.index('class="run-status"'),
+      "no run form" if not run_form else
+      [l.strip() for l in inside.splitlines()
+       if "actions" in l or "run-status" in l][:4])
 
-# And it has to stay out of the way. A minute is long enough that people
-# go on reading the last graph while it works, so this is a corner card
-# that lets clicks through, not a cover over the page.
+# And it takes their place rather than floating over the page: the last
+# graph and the numbers beside it stay readable while the run works.
 css = app.test_client().get("/static/style.css").get_data(as_text=True)
-corner = re.search(r"\.run-status \{(.*?)\}", css, re.S)
-check("the running indicator sits in a corner and lets clicks through",
-      corner is not None
-      and "position: fixed" in corner.group(1)
-      and "pointer-events: none" in corner.group(1)
-      and "inset: 0" not in corner.group(1),
-      corner.group(1).strip() if corner else "no .run-status rule")
+rule = re.search(r"\.run-status \{(.*?)\}", css, re.S)
+check("starting a run swaps the buttons for the battery, in place",
+      rule is not None
+      and "position: fixed" not in rule.group(1)
+      and ".js-long-run.is-running .actions" in css
+      and ".js-long-run.is-running .run-status" in css,
+      rule.group(1).strip() if rule else "no .run-status rule")
 
 # --- rejects bad input ------------------------------------------------
 resp = client.post("/format", data={

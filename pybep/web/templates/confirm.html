@@ -40,14 +40,16 @@
       <button class="primary" type="submit">Run optimization</button>
       <a class="secondary link-button" href="{{ url_for('main.index') }}">Start over</a>
     </div>
-    <p class="file-hint" style="margin-top:12px;">
+    <p class="file-hint run-hint" style="margin-top:12px;">
       The optimization can take a while &mdash; leave this tab open while it runs.
     </p>
+
+    {# Last in the form on purpose: with the button and the hint above it
+       hidden, this comes to rest exactly where the button was. #}
+    {% include "_running.html" %}
   </form>
   {% else %}
   <p>No files could be read. <a href="{{ url_for('main.index') }}">Go back and try again</a>.</p>
   {% endif %}
 </main>
-
-{% include "_running.html" %}
 {% endblock %}

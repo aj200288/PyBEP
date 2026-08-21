@@ -145,6 +145,10 @@
       </button>
     </div>
     {% endif %}
+
+    {# Last in the form on purpose: with the buttons above it hidden, this
+       comes to rest exactly where Continue was. #}
+    {% include "_running.html" %}
   </form>
 
   <script>
@@ -189,5 +193,3 @@
     });
   </script>
 </main>
-
-{% include "_running.html" %}
