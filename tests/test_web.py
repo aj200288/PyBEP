@@ -486,20 +486,23 @@ resp = client.post("/upload", data={
 fid = re.findall(r'name="soc_([0-9a-f]{32})"', resp.get_data(as_text=True))[0]
 body = client.post("/confirm", data={f"soc_{fid}": "0", f"ocv_{fid}": "1"}) \
              .get_data(as_text=True)
-check("the results page offers a re-run without re-picking files",
-      'href="/adjust"' in body, [l for l in body.splitlines() if "adjust" in l])
-
-resp = client.get("/adjust")
-adjust_page = resp.get_data(as_text=True)
-check("the adjust page loads", resp.status_code == 200, resp.status_code)
-check("it says what is being reused",
-      "1 cathode(s) &times; 1 anode(s)" in adjust_page
-      and os.path.splitext(os.path.basename(battery))[0] in adjust_page,
-      [l.strip() for l in adjust_page.splitlines() if "result-item" in l][:2])
+check("the results page carries the re-run form itself",
+      'action="/adjust"' in body, [l for l in body.splitlines() if "adjust" in l])
+check("no settings page of its own is left to navigate to",
+      client.get("/adjust").status_code == 405
+      and 'href="/adjust"' not in body,
+      [l for l in body.splitlines() if "/adjust" in l])
+check("it names the battery curve the answer belongs to",
+      "Battery OCV curve:" in body
+      and os.path.splitext(os.path.basename(battery))[0] in body,
+      [l.strip() for l in body.splitlines() if "result-item" in l][:3])
 check("the sliders start from the settings just used",
-      'value="1" name="iterations"' in adjust_page
-      and 'value="1.0" name="slider_a"' in adjust_page,
-      re.findall(r'<input id="slider-\w+"[^>]*value="[^"]*"[^>]*>', adjust_page))
+      'value="1" name="iterations"' in body
+      and 'value="1.0" name="slider_a"' in body,
+      re.findall(r'<input id="slider-\w+"[^>]*value="[^"]*"[^>]*>', body))
+check("the re-run sliders carry the iteration ceiling with them",
+      f'max="{MAX_ITERATIONS}" step="1"' in body,
+      re.findall(r'<input id="slider-iterations"[^>]*>', body))
 
 with client.session_transaction() as sess:
     workdir = sess["workdir"]
@@ -531,8 +534,9 @@ check("a new run wipes the previous run's uploads",
       not os.path.isdir(old_workdir), old_workdir)
 
 client.get("/")  # drop any flash left over before the checks below
-resp = client.get("/adjust", follow_redirects=True)
-check("adjust after the files are gone redirects instead of erroring",
+resp = client.post("/adjust", data={"iterations": "1", "slider_a": "0.5"},
+                   follow_redirects=True)
+check("a library-only run re-runs after the old uploads were wiped",
       resp.status_code == 200, resp.status_code)
 
 # --- deselecting everything is refused --------------------------------
@@ -667,9 +671,11 @@ recov.post("/upload", content_type="multipart/form-data", data={
     "cathode_files": [upload_file(cathode)],
     "library_anodes": [lib_anodes[0]],
     "iterations": "1"})
-r = recov.get("/adjust", follow_redirects=True)
-check("adjusting a run with no usable battery curve redirects, not crashes",
-      r.status_code == 200 and "no usable battery curve" in r.get_data(as_text=True),
+r = recov.post("/adjust", data={"iterations": "1", "slider_a": "0.5"},
+               follow_redirects=True)
+check("re-running a run with no usable battery curve redirects, not crashes",
+      r.status_code == 200
+      and "readable battery OCV file" in r.get_data(as_text=True),
       r.status_code)
 
 gone = app.test_client()

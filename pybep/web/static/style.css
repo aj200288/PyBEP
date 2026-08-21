@@ -648,6 +648,7 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   flex-direction: column;
   align-items: center;
   flex: 1;
+  min-width: min(420px, 100%);
   max-width: 760px;
   gap: 20px;
 }
@@ -671,7 +672,7 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   box-shadow: var(--shadow);
 }
 
-.results-card h2 {
+.results-card h2, .rerun-panel h2 {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 750;
@@ -740,15 +741,17 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   word-break: break-word;
 }
 
-/* What a re-run will reuse, shown above the settings on /adjust. */
-.reuse-summary {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-sunk);
-  padding: 2px 14px;
-  margin-bottom: 26px;
+/* The settings, beside the results instead of on a page of their own.
+   .container is already a wrapping flex row, so this sits to the right of
+   the graph on a wide screen and drops underneath it on a narrow one,
+   with no media query in the way. */
+.rerun-panel {
+  flex: 0 0 auto;
+  width: min(330px, 100%);
+  padding: 24px 26px;
 }
-.reuse-summary .result-item:last-child { padding-bottom: 11px; }
+
+.rerun-panel h2 + p { margin: 6px 0 22px; font-size: 0.85rem; }
 
 /* --- Banners --- */
 

@@ -41,6 +41,12 @@
       <span class="label">Lowest RMSD:</span>
       <span class="value">{{ "%.6f"|format(lowest_rmsd) }}</span>
     </div>
+    {% if battery_source %}
+    <div class="result-item">
+      <span class="label">Battery OCV curve:</span>
+      <span class="value">{{ battery_source }}</span>
+    </div>
+    {% endif %}
     <div class="result-item">
       <span class="label">Candidates compared:</span>
       <span class="value">{{ n_cathodes }} cathode(s) &times; {{ n_anodes }} anode(s)</span>
@@ -54,10 +60,30 @@
       </span>
     </div>
   </div>
-
-  <div class="actions" style="width:100%;max-width:760px;">
-    <a class="primary link-button" href="{{ url_for('main.adjust') }}">Adjust settings and re-run</a>
-    <a class="secondary link-button" href="{{ url_for('main.index') }}">Start a new run</a>
-  </div>
 </div>
+
+{# The settings sit beside the results rather than on a page of their own:
+   a re-run only changes the numbers below, and having them next to the
+   graph they produced is what makes comparing two settings quick. #}
+<aside class="card rerun-panel">
+  <h2>Adjust and re-run</h2>
+  <p>The same curves are reused &mdash; only the settings below change.</p>
+
+  <form class="fields" method="POST" action="{{ url_for('main.adjust') }}">
+    {% with iterations=settings.iterations,
+            battery_weight=settings.battery_weight,
+            derivative_weight=settings.derivative_weight %}
+      {% include "_settings.html" %}
+    {% endwith %}
+
+    <div class="actions">
+      <button class="primary" type="submit">Run again</button>
+      <a class="secondary link-button" href="{{ url_for('main.index') }}">Start a new run</a>
+    </div>
+  </form>
+
+  <p class="file-hint" style="margin-top:14px;">
+    The optimization can take a while &mdash; leave this tab open while it runs.
+  </p>
+</aside>
 {% endblock %}

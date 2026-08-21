@@ -10,7 +10,6 @@ instances behind a load balancer would need shared storage instead.
 """
 import os
 import tempfile
-from collections import Counter
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    session, flash, send_file, abort, current_app)
@@ -259,12 +258,15 @@ def confirm():
     return _run_and_render(files_meta, choices, settings, workdir)
 
 
-@bp.route('/adjust', methods=['GET', 'POST'])
+@bp.route('/adjust', methods=['POST'])
 def adjust():
     """
     Re-run the last optimization with different settings, reusing the
     curves already chosen — the point being not to pick the files again
     just to try three iterations instead of one.
+
+    POST only: the settings form lives on the results page beside the
+    graph it produced, so there is no page of its own to GET.
     """
     files_meta = session.get('files')
     settings = session.get('settings')
@@ -279,34 +281,10 @@ def adjust():
               "please start again.", "error")
         return redirect(url_for('main.index'))
 
-    if request.method == 'POST':
-        settings = _clamp_settings(request.form)
-        session['settings'] = settings
-        return _run_and_render(files_meta, session.get('choices') or {},
-                               settings, workdir)
-
-    chosen = session.get('library') or {}
-    uploaded = Counter(meta['curve_type'] for meta in files_meta)
-    battery_upload = next((meta for meta in files_meta
-                           if meta['curve_type'] == 'battery'), None)
-
-    battery_source = session.get('battery_choice')
-    if not battery_source:
-        if battery_upload is None:
-            # The battery file failed to parse, so that attempt never
-            # produced a run worth adjusting.
-            flash("That run had no usable battery curve, please start again.",
-                  "error")
-            return redirect(url_for('main.index'))
-        battery_source = pipeline.curve_label(battery_upload['path'])
-
-    return render_template(
-        'adjust.html',
-        settings=settings,
-        max_iterations=current_app.config['MAX_ITERATIONS'],
-        n_cathodes=len(chosen.get('cathode', [])) + uploaded['cathode'],
-        n_anodes=len(chosen.get('anode', [])) + uploaded['anode'],
-        battery_source=battery_source)
+    settings = _clamp_settings(request.form)
+    session['settings'] = settings
+    return _run_and_render(files_meta, session.get('choices') or {},
+                           settings, workdir)
 
 
 def _run_and_render(files_meta, choices, settings, workdir):
@@ -327,9 +305,12 @@ def _run_and_render(files_meta, choices, settings, workdir):
     warnings = []
     errors = []
 
-    battery_name = session.get('battery_choice')
-    if battery_name:
-        loaded = load_battery_library_curve(battery_name)
+    # Names what was actually decomposed: the library choice, or the
+    # uploaded file's own label once it parses. The results page has no
+    # other way to say which curve the answer belongs to.
+    battery_source = session.get('battery_choice')
+    if battery_source:
+        loaded = load_battery_library_curve(battery_source)
         if loaded is not None:
             battery_soc, battery_ocv = loaded
 
@@ -344,6 +325,7 @@ def _run_and_render(files_meta, choices, settings, workdir):
 
             if meta['curve_type'] == 'battery':
                 battery_soc, battery_ocv = x, y
+                battery_source = label
             else:
                 target = cathodes if meta['curve_type'] == 'cathode' else anodes
                 label = _unique_key(label, target)
@@ -374,6 +356,10 @@ def _run_and_render(files_meta, choices, settings, workdir):
     # starts a new run (create_session_workdir) and never enter data/.
     context['warnings'] = warnings
     context['settings'] = settings
+    # The results page carries the settings form itself, so it needs the
+    # same iteration ceiling the front page uses.
+    context['max_iterations'] = current_app.config['MAX_ITERATIONS']
+    context['battery_source'] = battery_source
     context['n_cathodes'] = len(cathodes)
     context['n_anodes'] = len(anodes)
     return render_template('results.html', **context)
