@@ -31,7 +31,8 @@
     {% endif %}
   {% endwith %}
 
-  <form class="fields" method="POST" action="{{ url_for('main.upload') }}" enctype="multipart/form-data">
+  <form class="fields js-long-run" method="POST" action="{{ url_for('main.upload') }}"
+        enctype="multipart/form-data">
     <div class="file-group">
       <label for="battery_choice">Battery OCV curve</label>
       <select class="select-control" id="battery_choice" name="battery_choice"
@@ -188,3 +189,5 @@
     });
   </script>
 </main>
+
+{% include "_running.html" %}

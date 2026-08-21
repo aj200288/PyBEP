@@ -27,7 +27,7 @@
   {% endif %}
 
   {% if previews %}
-  <form method="POST" action="{{ url_for('main.confirm') }}">
+  <form class="js-long-run" method="POST" action="{{ url_for('main.confirm') }}">
     <div class="confirm-list">
       {% for p in previews %}
       {% with key = p.file_id %}
@@ -48,4 +48,6 @@
   <p>No files could be read. <a href="{{ url_for('main.index') }}">Go back and try again</a>.</p>
   {% endif %}
 </main>
+
+{% include "_running.html" %}
 {% endblock %}
