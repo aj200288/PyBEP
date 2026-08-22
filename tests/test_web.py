@@ -334,6 +334,18 @@ check("the collapsed summary says how many are selected",
 check("the front page keeps the results half of the page ready and empty",
       'class="placeholder"' in body and "results appear here" in body.lower(),
       [l.strip() for l in body.splitlines() if "placeholder" in l])
+# The name of a picked file belongs beside Browse, which means drawing
+# that box: a file input writes its own text there and offers no way in,
+# least of all once the file is on the server and the box is empty again.
+browse = re.findall(r'<label class="file-picker-browse" for="(\w+)">', body)
+boxes = re.findall(r'<input id="(\w+)" class="input-file js-stage-file"', body)
+check("every file box has a Browse of its own, pointing at its input",
+      len(browse) == 3 and browse == boxes, (browse, boxes))
+check("an empty box says so in the place the browser would have",
+      re.findall(r'<span class="staged-empty">([^<]+)</span>', body)
+      == ["No file selected.", "No files selected.", "No files selected."],
+      re.findall(r'<span class="staged-empty">([^<]+)</span>', body))
+
 check("nothing is waiting before a file has been picked",
       'class="staged-file"' not in body,
       [l.strip() for l in body.splitlines() if "staged-file" in l])
@@ -634,6 +646,9 @@ held = staging.get("/").get_data(as_text=True)
 check("the form names the file it is holding",
       'class="staged-file"' in held and os.path.basename(battery) in held,
       [l.strip() for l in held.splitlines() if "staged-file" in l][:2])
+row = re.search(r'for="battery_file">Browse….*?</div>', held, re.S).group(0)
+check("the name lands in the box, beside Browse",
+      os.path.basename(battery) in row and "staged-empty" not in row, row[:220])
 battery_box = re.search(r'<input id="battery_file"[^>]*>', held).group(0)
 check("and stops requiring the box that has just been emptied",
       "required" not in battery_box, battery_box)
@@ -702,6 +717,11 @@ with swap.session_transaction() as sess:
     swap_dir = os.path.join(sess["staged_workdir"], "cathode")
 check("and the file it replaced goes off the disk with it",
       len(os.listdir(swap_dir)) == 1, os.listdir(swap_dir))
+
+opened = swap.get("/").get_data(as_text=True)
+check("the panel holding a file opens, so the name is not shut inside it",
+      '<details class="extra-upload" open>' in opened,
+      [l.strip() for l in opened.splitlines() if "extra-upload" in l])
 
 r = swap.post("/columns/keep", data={})
 check("taking the last file back out leaves nothing named",

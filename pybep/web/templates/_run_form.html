@@ -12,12 +12,17 @@
   already handed to the server by curve type.
 #}
 
-{% macro staged_list(curve_type, files) %}
-{# The files already on the server for one box, each with a way of taking
-   it back out. The script at the foot of this file redraws this from what
-   /columns and /columns/keep answer, so the markup it builds has to keep
-   the same shape as the markup here. #}
-<div class="staged-files" data-staged-for="{{ curve_type }}">
+{% macro staged_list(curve_type, files, empty='No files selected.') %}
+{# What one file box is holding, in the box's own row: the names, each
+   with a way of taking it back out, or the words the browser would have
+   put there itself. The script at the foot of this file redraws this from
+   what /columns and /columns/keep answer, so the markup it builds has to
+   keep the same shape as the markup here. #}
+<div class="staged-files" data-staged-for="{{ curve_type }}"
+     data-empty="{{ empty }}">
+  {% if not files %}
+  <span class="staged-empty">{{ empty }}</span>
+  {% endif %}
   {% for f in files %}
   <span class="staged-file" data-file-id="{{ f.file_id }}">
     <span class="staged-name">{{ f.name }}</span>
@@ -59,14 +64,18 @@
         {% endfor %}
       </select>
       <div id="battery-upload">
-        {# Not `required` once a curve is already on the server: the box is
-           emptied as soon as its file is sent, and a required empty box
-           would then refuse to submit the form. #}
-        <input id="battery_file" class="input-file js-stage-file" type="file"
-               name="battery_file" accept=".txt,.csv,.xlsx"
-               {{ 'required' if not staged.battery else '' }}/>
+        {# `required` here is for a browser that never runs the script
+           below; that script takes it off, because it also takes the box
+           out of sight and a browser cannot report an error on something
+           it cannot show. The server refuses a run with no curve anyway. #}
+        <div class="file-picker">
+          <input id="battery_file" class="input-file js-stage-file" type="file"
+                 name="battery_file" accept=".txt,.csv,.xlsx"
+                 {{ 'required' if not staged.battery else '' }}/>
+          <label class="file-picker-browse" for="battery_file">Browse…</label>
+          {{ staged_list('battery', staged.battery, 'No file selected.') }}
+        </div>
         <span class="file-hint">The measured full-cell curve you want decomposed (.txt / .csv / .xlsx).</span>
-        {{ staged_list('battery', staged.battery) }}
       </div>
     </div>
 
@@ -114,18 +123,21 @@
         </span>
       </details>
 
-      <details class="extra-upload">
+      {# Open when it is holding something: the names are inside it, and
+         a file that has been handed over should not need looking for. #}
+      <details class="extra-upload" {{ 'open' if staged_files else '' }}>
         <summary>Add your own {{ kind }} files</summary>
-        <input class="input-file js-stage-file" type="file" name="{{ upload_field }}"
-               multiple accept=".txt,.csv,.xlsx"/>
+        <div class="file-picker">
+          <input id="{{ upload_field }}" class="input-file js-stage-file" type="file"
+                 name="{{ upload_field }}" multiple accept=".txt,.csv,.xlsx"/>
+          <label class="file-picker-browse" for="{{ upload_field }}">Browse…</label>
+          {{ staged_list(kind, staged_files) }}
+        </div>
         <span class="file-hint">
           Only needed for a curve that isn't in the list above. Uploaded files are
           used for this run only — they are not added to the list.
         </span>
       </details>
-      {# Outside the panel above, so a file that has been handed over is
-         visible whether or not the panel happens to be open. #}
-      {{ staged_list(kind, staged_files) }}
     </div>
     {% endmacro %}
 
@@ -181,8 +193,13 @@
       // A curve already on the server counts as one chosen: the box that
       // sent it is empty again, and requiring it would block the run.
       const held = document.querySelector('[data-staged-for="battery"] .staged-file');
+      // And once the box is drawn rather than left to the browser, the
+      // input is out of sight: browsers refuse to report a validation
+      // error on something they cannot show, and the form then fails to
+      // submit with nothing said. The server catches a missing curve.
+      const drawn = box.querySelector('.file-picker.is-drawn');
       box.hidden = !own;
-      input.required = own && !held;
+      input.required = own && !held && !drawn;
       if (!own) input.value = '';
     }
     toggleBatteryUpload();
@@ -251,6 +268,14 @@
       const STAGE_URL = '{{ url_for("main.columns") }}';
       const KEEP_URL = '{{ url_for("main.columns_keep") }}';
 
+      // The browser's own file box is left alone until this script is
+      // known to be running. Without it nothing is ever staged, so the
+      // box's own "No files selected." is the truth and its Browse button
+      // is the only one there is.
+      document.querySelectorAll('.file-picker')
+              .forEach(picker => picker.classList.add('is-drawn'));
+      toggleBatteryUpload();
+
       const lead = document.getElementById('column-dialog-lead');
       const note = document.getElementById('column-dialog-note');
       const list = document.getElementById('column-dialog-list');
@@ -274,14 +299,23 @@
                .map(chip => chip.dataset.fileId);
       }
 
-      // Redraws the named files under each box. textContent throughout:
-      // the names are the user's own and have never been through a
-      // template.
+      // Redraws what each box is holding. textContent throughout: the
+      // names are the user's own and have never been through a template.
       function drawStaged(groups) {
         Object.keys(groups).forEach(curveType => {
           const box = document.querySelector(`[data-staged-for="${curveType}"]`);
           if (!box) return;
           box.textContent = '';
+          if (!groups[curveType].length) {
+            const empty = document.createElement('span');
+            empty.className = 'staged-empty';
+            empty.textContent = box.dataset.empty;
+            box.appendChild(empty);
+          }
+          // The candidate boxes sit in a panel that starts closed, so a
+          // file just added to one would otherwise land out of sight.
+          const panel = box.closest('details');
+          if (panel && groups[curveType].length) panel.open = true;
           groups[curveType].forEach(file => {
             const chip = document.createElement('span');
             chip.className = 'staged-file';

@@ -790,25 +790,90 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 .placeholder p { margin: 0 0 14px; }
 .placeholder p:last-child { margin-bottom: 0; }
 
-/* Names a file the server is already holding for the next run. The box
-   it came from is empty again — browsers refuse to refill a file input —
-   so this is the only sign the file is in, and the x the only way out. */
+/* The file box, drawn rather than left to the browser — but only once
+   the script that stages files has said it is running.
+
+   A file input writes its own filename beside its own Browse button and
+   there is no way to reach that text. The moment a file goes to the
+   server the box is emptied, so the browser writes "No files selected."
+   next to a file that is very much selected. With the script running the
+   input is hidden and this row says what the server holds; without it the
+   browser's own box is left exactly as it was, because then nothing is
+   ever staged and its own text is right. */
+.file-picker.is-drawn {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  /* The clipped input below is positioned against this, so a validation
+     bubble comes up at the box rather than at the corner of the page. */
+  position: relative;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.file-picker.is-drawn:hover { border-color: var(--blue); }
+/* The input is what takes focus, so the ring belongs to the row. */
+.file-picker.is-drawn:focus-within {
+  border-color: var(--blue);
+  box-shadow: var(--ring);
+}
+
+/* Clipped rather than display:none, which would take it out of the tab
+   order and stop the label opening it. */
+.file-picker.is-drawn .input-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* Stands in for the button inside the input, and is only there when that
+   one is not. Same look, since it is the same button as far as anyone
+   using it is concerned. */
+.file-picker-browse { display: none; }
+.file-picker.is-drawn .file-picker-browse {
+  display: inline-block;
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface-sunk);
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.file-picker.is-drawn .file-picker-browse:hover { background: var(--sky-wash); }
+
+/* Names the files the server is holding for the next run, in the place
+   the browser would have named them. Nothing is staged without the script
+   running, so with the browser's own box on show this would only repeat
+   what that box already says. */
+.file-picker:not(.is-drawn) .staged-files { display: none; }
+
 .staged-files {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 9px;
+  min-width: 0;
 }
-/* Nothing staged is the usual case; without this every box would carry a
-   gap under it waiting for a file that may never come. */
-.staged-files:empty { margin-top: 0; }
+
+.staged-empty { color: var(--muted); font-size: 0.85rem; }
 
 .staged-file {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   max-width: 100%;
-  padding: 4px 5px 4px 11px;
+  padding: 4px 4px 4px 11px;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--sky-wash);
@@ -820,8 +885,8 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 
 .staged-drop {
   flex: none;
-  width: 19px;
-  height: 19px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 999px;
