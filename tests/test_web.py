@@ -649,6 +649,13 @@ check("the form names the file it is holding",
 row = re.search(r'for="battery_file">Browse….*?</div>', held, re.S).group(0)
 check("the name lands in the box, beside Browse",
       os.path.basename(battery) in row and "staged-empty" not in row, row[:220])
+# The shared button rule reserves 110px, which a width cannot undo.
+style = app.test_client().get("/static/style.css").get_data(as_text=True)
+drop_rule = re.search(r"\.staged-drop \{(.*?)\}", style, re.S)
+check("the cross beside a name gives up the shared button width",
+      drop_rule is not None and "min-width: 0" in drop_rule.group(1),
+      drop_rule.group(1).strip() if drop_rule else "no .staged-drop rule")
+
 check("each name comes with a way of taking it back out",
       'class="staged-drop" data-drop=' in held
       and f'aria-label="Remove {os.path.basename(battery)}"' in held,

@@ -891,6 +891,12 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Every button on the page starts from one shared rule, and that rule
+     reserves 110px for the wide ones. A width of 14px does not override a
+     min-width of 110px: without this line the cross sits in the middle of
+     a 110px button, with some fifty pixels of nothing either side of it,
+     and no amount of shrinking the width changes that. */
+  min-width: 0;
   width: 14px;
   height: 14px;
   padding: 0;
