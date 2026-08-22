@@ -182,6 +182,70 @@ def save_and_preview(file_storage, curve_type, workdir):
     }
 
 
+STAGED_MANIFEST = 'staged.json'
+
+
+def load_staged(workdir):
+    """
+    The files this session has handed over but not yet run, each with the
+    columns already settled for it. [] when there are none.
+
+    Kept in a file beside the uploads rather than in the session cookie:
+    it grows with every file picked, and the cookie already carries the
+    run's own list of them. Same reasoning that put result_view.json on
+    disk.
+    """
+    try:
+        with open(os.path.join(workdir, STAGED_MANIFEST), encoding='utf-8') as f:
+            entries = json.load(f)
+    except (OSError, ValueError):
+        return []
+    return entries if isinstance(entries, list) else []
+
+
+def save_staged(workdir, entries):
+    """Write the staged manifest back."""
+    with open(os.path.join(workdir, STAGED_MANIFEST), 'w', encoding='utf-8') as f:
+        json.dump(entries, f)
+
+
+def drop_staged(workdir, entries, keep_ids):
+    """
+    Delete every staged file whose id is not in keep_ids, save what is
+    left, and return it.
+
+    Paths come from the manifest this module wrote, never from the
+    browser, which is why removing them by name is safe here.
+    """
+    kept = []
+    for entry in entries:
+        if entry.get('file_id') in keep_ids:
+            kept.append(entry)
+            continue
+        try:
+            os.remove(entry['path'])
+        except OSError:
+            pass  # already gone; the manifest is what the routes read
+    save_staged(workdir, kept)
+    return kept
+
+
+def adopt_staged(entry, workdir):
+    """
+    Copy one staged file into the run's own directory and return the new
+    path.
+
+    The run keeps its own copy because the two directories are emptied at
+    different moments: starting over clears the staged ones, and a result
+    still on screen has to stay re-runnable after that.
+    """
+    dest_dir = os.path.join(workdir, entry['curve_type'])
+    os.makedirs(dest_dir, exist_ok=True)
+    dest_path = os.path.join(dest_dir, os.path.basename(entry['path']))
+    shutil.copy2(entry['path'], dest_path)
+    return dest_path
+
+
 def finalize_curve(file_path, curve_type, column_choice):
     """
     Parse+clean+resample a single file now that its SOC/OCV columns have

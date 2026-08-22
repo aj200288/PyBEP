@@ -631,6 +631,30 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   background: var(--surface-sunk);
 }
 
+/* Picking a file opens the question here rather than sending the page
+   away, so everything else already chosen on the form stays chosen and
+   visible behind it. Holding focus inside, and closing on Escape, come
+   from <dialog> itself and are not written anywhere below. */
+.column-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.column-dialog::backdrop {
+  background: rgba(0, 34, 63, .45);
+  backdrop-filter: blur(2px);
+}
+.column-dialog h2 { margin: 0 0 6px; font-size: 1.05rem; }
+.column-dialog-lead { margin: 0 0 16px; color: var(--muted); font-size: 0.85rem; }
+/* While the file is still being read there are no cards yet, and the
+   gap the list leaves would read as something failing to appear. */
+.column-dialog .confirm-list:empty { margin-bottom: 0; }
+
 .column-select-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .column-select-row > div { flex: 1; min-width: 140px; }
 .column-select-row label {
@@ -757,20 +781,49 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 .placeholder p { margin: 0 0 14px; }
 .placeholder p:last-child { margin-bottom: 0; }
 
-/* Names a file the form is unable to show, because browsers refuse to
-   refill a file input. Warm rather than red: nothing is wrong yet, but
-   running again without reading it would drop the file. */
-.carried-note {
-  display: block;
+/* Names a file the server is already holding for the next run. The box
+   it came from is empty again — browsers refuse to refill a file input —
+   so this is the only sign the file is in, and the x the only way out. */
+.staged-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 9px;
-  padding: 9px 11px;
-  border: 1px solid var(--warning-border);
-  border-radius: var(--radius-sm);
-  background: var(--warning-bg);
-  color: var(--warning);
-  font-size: 0.79rem;
-  line-height: 1.45;
 }
+/* Nothing staged is the usual case; without this every box would carry a
+   gap under it waiting for a file that may never come. */
+.staged-files:empty { margin-top: 0; }
+
+.staged-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 5px 4px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--sky-wash);
+  font-size: 0.79rem;
+}
+
+/* File names run long and have no spaces to break at. */
+.staged-name { overflow-wrap: anywhere; }
+
+.staged-drop {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.staged-drop:hover { background: var(--surface); color: var(--error); }
+.staged-drop:focus-visible { outline: none; box-shadow: var(--ring); }
 
 /* --- Banners --- */
 

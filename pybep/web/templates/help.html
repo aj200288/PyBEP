@@ -82,12 +82,21 @@
       material; add derivative weight to make the peaks matter.
     </li>
     <li>
-      <strong>Confirm the columns.</strong> This step appears only for files you
-      uploaded. PyBEP shows the first few rows of each with its guess
-      pre-selected, so you can see whether the guess is right before committing
-      to it. Built-in curves skip it because their layout is already known.
+      <strong>Confirm the columns.</strong> Only for files of your own, and it
+      happens the moment you pick one: PyBEP reads the file there and then and
+      asks, over the form, which column is SOC and which is OCV &mdash; with
+      the first few rows shown and its guess already selected. Answer it and
+      the file is named under the box it came from, with a &times; beside it
+      for taking it back out. Built-in curves never ask, because their layout
+      is already known.
     </li>
   </ol>
+  <p class="note">
+    However the curves were chosen, <strong>Run optimization</strong> is the
+    only button that starts a run. By the time you press it, any file of your
+    own is already on the server with its columns settled, so nothing is asked
+    in between.
+  </p>
   <p class="note">
     Comparing the whole built-in set is
     {{ cathode_library|length * anode_library|length }} electrode pairs: a few
@@ -160,10 +169,10 @@
     one, and the earlier result cannot be retrieved afterwards.
   </p>
   <p class="note">
-    If you uploaded your own files, choose them again before each run. No
-    browser will put a file back into a file box, so those fields come back
-    empty, and a run started from there would go without them. The form names
-    the files still on the server, so you can see which ones to pick.
+    Files of your own stay on the server between runs. The box they came from
+    looks empty afterwards &mdash; no browser will refill a file box &mdash;
+    but the file is named underneath it, and the next run uses it without your
+    picking it again. Starting over clears them along with everything else.
   </p>
 
   <h2 id="files">Preparing your own files</h2>

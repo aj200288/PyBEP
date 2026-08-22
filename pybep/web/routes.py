@@ -12,7 +12,7 @@ import os
 import tempfile
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   session, flash, send_file, abort, current_app)
+                   session, flash, send_file, abort, current_app, jsonify)
 
 from ..core import (DataFormatError, library_names, select_library_curves,
                     battery_library_names, load_battery_library_curve,
@@ -24,26 +24,66 @@ bp = Blueprint('main', __name__)
 CURVE_TYPES = ('cathode', 'anode', 'battery')
 CANDIDATE_TYPES = ('cathode', 'anode')
 
+# The file boxes on the run form, and the kind of curve each one holds.
+# /columns goes by this, so a field name arriving from the browser can
+# only ever name a curve type that exists.
+STAGED_FIELDS = {'battery_file': 'battery',
+                 'cathode_files': 'cathode',
+                 'anode_files': 'anode'}
+
 # What the sliders show before anything has been run: one pass, all the
 # weight on the OCV curve itself rather than its derivative.
 DEFAULT_SETTINGS = {'iterations': 1, 'battery_weight': 1.0,
                     'derivative_weight': 0.0}
 
 
-def _previous_uploads():
+def _staged_workdir(create=False):
     """
-    The files this session has already uploaded, grouped by curve type.
+    Where a file waits between being picked on the form and being run.
 
-    A browser will not put a file back into a file input, so the form
-    always comes back with those boxes empty. Naming the files is the
-    difference between the user picking them again and quietly running
-    without them.
+    Its own directory, not the run's: /upload makes a fresh run directory
+    each time and that wipes the old one, which would throw away files the
+    user had already picked and answered the column question for. Same
+    reasoning as format_workdir.
     """
-    names = {curve_type: [] for curve_type in CURVE_TYPES}
-    for meta in session.get('files') or []:
-        if meta['curve_type'] in names and os.path.exists(meta['path']):
-            names[meta['curve_type']].append(pipeline.curve_label(meta['path']))
-    return names
+    workdir = _session_workdir('staged_workdir')
+    if workdir is None and create:
+        workdir = pipeline.create_session_workdir()
+        session['staged_workdir'] = workdir
+    return workdir
+
+
+def _staged():
+    """Everything waiting to be run, in the order it was picked."""
+    workdir = _staged_workdir()
+    return pipeline.load_staged(workdir) if workdir else []
+
+
+def _staged_groups(entries):
+    """
+    The staged files as the form and the browser want them: id and name
+    only, grouped by the box each came from.
+
+    The stored path never goes out — the browser has no use for it, and it
+    names a real directory on the server.
+    """
+    groups = {curve_type: [] for curve_type in CURVE_TYPES}
+    for entry in entries:
+        if entry['curve_type'] in groups:
+            groups[entry['curve_type']].append(
+                {'file_id': entry['file_id'], 'name': entry['filename']})
+    return groups
+
+
+def _answered(files_meta):
+    """
+    The column choices already settled, keyed by file id.
+
+    A file that came through /columns carries its answer with it, so
+    neither the run nor a later /adjust has to ask again.
+    """
+    return {meta['file_id']: tuple(meta['choice'])
+            for meta in files_meta if meta.get('choice')}
 
 
 def _form_context(from_session=True):
@@ -64,11 +104,13 @@ def _form_context(from_session=True):
         chosen = session.get('library') or {}
         battery_choice = session.get('battery_choice') or ''
         settings = session.get('settings') or DEFAULT_SETTINGS
-        carried = _previous_uploads()
+        staged = _staged_groups(_staged())
     else:
         chosen, battery_choice = {}, ''
         settings = DEFAULT_SETTINGS
-        carried = {curve_type: [] for curve_type in CURVE_TYPES}
+        # Starting over throws the waiting files away too, so an empty
+        # list here is the truth rather than a page hiding them.
+        staged = _staged_groups([])
 
     return {
         'max_iterations': current_app.config['MAX_ITERATIONS'],
@@ -83,7 +125,7 @@ def _form_context(from_session=True):
         # A copy: a caller that ever edited what it was handed would
         # otherwise rewrite the defaults for every session in the process.
         'settings': dict(settings),
-        'carried': carried,
+        'staged': staged,
     }
 
 
@@ -212,6 +254,12 @@ def index():
         # load was a reload. Refreshing means "put it back the way it
         # started", so the run is set aside — not deleted; the link on
         # the empty panel brings it back, and /download still works.
+        # Files picked but not yet run do go: the form is about to say
+        # nothing is waiting, and it has to be telling the truth.
+        staged_workdir = _staged_workdir()
+        if staged_workdir:
+            pipeline.drop_staged(staged_workdir,
+                                 pipeline.load_staged(staged_workdir), set())
         session['results_hidden'] = True
         return redirect(url_for('main.index'))
     if request.args.get('restore'):
@@ -223,11 +271,6 @@ def index():
     view = pipeline.load_result_view(workdir) if workdir else None
 
     if view is None:
-        # Files can be sitting in the directory with no run behind them —
-        # someone who started a run and then walked away from the
-        # column-confirmation step. Offering to re-run those would offer
-        # something that has never run.
-        context['carried'] = {curve_type: [] for curve_type in CURVE_TYPES}
         return render_template('index.html', **context)
 
     if session.get('results_hidden'):
@@ -259,6 +302,137 @@ def help_page():
         battery_library=battery_library_names())
 
 
+def _cell(value):
+    """One preview cell as text, the way the confirmation page shows it."""
+    try:
+        return format(float(value), '.4g')
+    except (TypeError, ValueError):
+        return str(value)
+
+
+@bp.route('/columns', methods=['POST'])
+def columns():
+    """
+    Take the files just picked on the form, keep them, and answer with
+    what the browser needs in order to ask about their columns.
+
+    This is why picking a file no longer costs a page: the file arrives
+    the moment it is chosen, the question is asked over the form that
+    asked for it, and the answer is stored here — so "Run optimization"
+    stays the one button that starts a run, whether or not any curve came
+    from a file.
+
+    JSON, because the browser is asking rather than navigating. If it
+    never gets here — no JavaScript, or a request that failed — the file
+    is still in its box and /upload falls back to the confirmation page.
+    """
+    workdir = _staged_workdir(create=True)
+    entries = pipeline.load_staged(workdir)
+    max_files = current_app.config['MAX_CURVE_FILES']
+    previews, errors = [], []
+
+    for field, curve_type in STAGED_FIELDS.items():
+        incoming = _uploaded(field)
+        if not incoming:
+            continue
+
+        # Picking again in a box replaces what was in it, the way the box
+        # itself does. Without this every change of mind would leave a
+        # file behind that the next run would quietly include.
+        entries = pipeline.drop_staged(
+            workdir, entries,
+            {e['file_id'] for e in entries if e.get('field') != field})
+
+        if curve_type == 'battery':
+            incoming = incoming[:1]  # one measured curve per run
+        room = max_files - sum(1 for e in entries
+                               if e['curve_type'] == curve_type)
+        if len(incoming) > room:
+            errors.append({
+                'filename': '',
+                'message': f"Only {max_files} {curve_type} files can be used "
+                           "in one run, so the rest were left out."})
+            incoming = incoming[:max(room, 0)]
+
+        for file_storage in incoming:
+            try:
+                info = pipeline.save_and_preview(file_storage, curve_type,
+                                                 workdir)
+            except DataFormatError as e:
+                errors.append({'filename': file_storage.filename,
+                               'message': str(e)})
+                continue
+            except Exception as e:
+                errors.append({'filename': file_storage.filename,
+                               'message': f"Unexpected error: {e}"})
+                continue
+
+            # The guess stands as the answer from the moment the file
+            # lands, so one whose dialog is never confirmed still runs the
+            # way the confirmation page would have run it.
+            entries.append({'file_id': info['file_id'],
+                            'curve_type': curve_type,
+                            'field': field,
+                            'filename': info['filename'],
+                            'path': info['path'],
+                            'n_cols': info['n_cols'],
+                            'soc': info['guess_soc'],
+                            'ocv': info['guess_ocv']})
+            previews.append({
+                'file_id': info['file_id'],
+                'curve_type': curve_type,
+                'filename': info['filename'],
+                'n_cols': info['n_cols'],
+                # Formatted here rather than in the browser: a raw table
+                # can hold NaN, and JSON has no way of writing one that
+                # JSON.parse will read back.
+                'rows': [[_cell(v) for v in row]
+                         for row in info['preview_rows']],
+                'guess_soc': info['guess_soc'],
+                'guess_ocv': info['guess_ocv']})
+
+    pipeline.save_staged(workdir, entries)
+    return jsonify(previews=previews, errors=errors,
+                   staged=_staged_groups(entries))
+
+
+@bp.route('/columns/keep', methods=['POST'])
+def columns_keep():
+    """
+    Store the answers to the column question, and throw away any staged
+    file the browser no longer lists.
+
+    One route for three gestures, because they differ only in what is
+    listed: confirming the dialog keeps everything, cancelling keeps what
+    was already there, and removing one file keeps the rest.
+    """
+    workdir = _staged_workdir()
+    if workdir is None:
+        return jsonify(staged=_staged_groups([]))
+
+    entries = pipeline.drop_staged(workdir, pipeline.load_staged(workdir),
+                                   set(request.form.getlist('keep')))
+    for entry in entries:
+        soc = request.form.get(f"soc_{entry['file_id']}")
+        ocv = request.form.get(f"ocv_{entry['file_id']}")
+        # Absent means "not asked about this time", so the standing
+        # answer — the guess, or an earlier choice — stays.
+        if soc is None or ocv is None:
+            continue
+        try:
+            soc, ocv = int(soc), int(ocv)
+        except ValueError:
+            continue
+        # A column index reaches the parser by position, and one out of
+        # range sinks the run with a message about an unreadable file.
+        # Only real columns pass.
+        if 0 <= soc < entry['n_cols'] and 0 <= ocv < entry['n_cols']:
+            entry['soc'], entry['ocv'] = soc, ocv
+
+    pipeline.save_staged(workdir, entries)
+    return jsonify(staged=_staged_groups(entries))
+
+
 @bp.route('/upload', methods=['POST'])
 def upload():
     # Candidate curves come from the bundled library by default; uploading
@@ -273,15 +447,26 @@ def upload():
     battery_choice = request.form.get('battery_choice', '')
     battery_files = _uploaded('battery_file')
 
+    # Files picked earlier went to /columns as they were chosen and were
+    # answered for over the form, so nothing is asked about them here —
+    # which is what leaves one button in a run. A library curve picked
+    # afterwards wins over a staged battery file: the box that file came
+    # from is hidden while a library curve is selected.
+    staged = [e for e in _staged()
+              if not (battery_choice and e['curve_type'] == 'battery')]
+
+    def staged_count(curve_type):
+        return sum(1 for e in staged if e['curve_type'] == curve_type)
+
     if battery_choice and battery_choice not in battery_library_names():
         flash("That battery OCV curve isn't one of the available files.", "error")
         return redirect(url_for('main.index'))
-    if not battery_choice and not battery_files:
+    if not battery_choice and not battery_files and not staged_count('battery'):
         flash("Please choose a battery OCV curve, or upload your own file.", "error")
         return redirect(url_for('main.index'))
 
-    n_cathodes = len(library_cathodes) + len(cathode_files)
-    n_anodes = len(library_anodes) + len(anode_files)
+    n_cathodes = len(library_cathodes) + len(cathode_files) + staged_count('cathode')
+    n_anodes = len(library_anodes) + len(anode_files) + staged_count('anode')
     if not n_cathodes or not n_anodes:
         flash("Please keep at least one cathode candidate and one anode candidate "
               "selected, or upload your own.", "error")
@@ -304,13 +489,31 @@ def upload():
     errors = []
     files_meta = []
 
+    # The run takes its own copy of each staged file. The two directories
+    # are emptied at different moments — starting over clears the staged
+    # ones — and a result still on screen has to stay re-runnable.
+    for entry in staged:
+        try:
+            path = pipeline.adopt_staged(entry, workdir)
+        except OSError as e:
+            errors.append({'filename': entry['filename'],
+                           'curve_type': entry['curve_type'],
+                           'message': f"could not be read back: {e}"})
+            continue
+        files_meta.append({'file_id': entry['file_id'],
+                           'curve_type': entry['curve_type'],
+                           'path': path,
+                           'choice': [entry['soc'], entry['ocv']]})
+
     # Only uploaded files are previewed and column-confirmed. The library
     # curves were checked by hand and have a known layout, so there is
     # nothing for the user to decide about them.
     tagged_files = (
         [(f, 'cathode') for f in cathode_files]
         + [(f, 'anode') for f in anode_files]
-        + ([] if battery_choice else [(battery_files[0], 'battery')])
+        # Empty when a curve was picked into the dialog instead, or
+        # when one came from the library.
+        + ([] if battery_choice else [(f, 'battery') for f in battery_files[:1]])
     )
     for file_storage, curve_type in tagged_files:
         try:
@@ -331,15 +534,23 @@ def upload():
     session['files'] = files_meta
 
     if not previews:
-        if errors:
+        if errors and not files_meta:
             flash("None of the uploaded files could be read.", "error")
             return redirect(url_for('main.index'))
-        # Everything came from the library, so there are no columns to
-        # confirm — go straight to the answer instead of showing an
-        # empty confirmation page.
-        session['choices'] = {}
-        return _run_and_store(files_meta, {}, session['settings'], workdir)
+        if errors:
+            # Some of it can still run. Say what cannot, rather than
+            # reporting a comparison that quietly left a candidate out.
+            flash("Left out: " + "; ".join(
+                f"{e['filename']} ({e['message']})" for e in errors), "error")
+        # Every curve either came from the library or has been answered
+        # for already, so there is nothing to confirm — go straight to the
+        # answer instead of showing an empty confirmation page.
+        session['choices'] = _answered(files_meta)
+        return _run_and_store(files_meta, session['choices'],
+                              session['settings'], workdir)
 
+    # No JavaScript, or a browser that could not reach /columns: the
+    # question still has to be asked, so it gets a page of its own.
     return render_template('confirm.html', previews=previews, errors=errors)
 
 
@@ -353,7 +564,9 @@ def confirm():
         flash("Your session expired, please start over.", "error")
         return redirect(url_for('main.index'))
 
-    choices = {}
+    # Files that came through /columns are answered for already and are
+    # not on this page; only the ones it asked about come back in the form.
+    choices = _answered(files_meta)
     for meta in files_meta:
         soc_key, ocv_key = f"soc_{meta['file_id']}", f"ocv_{meta['file_id']}"
         if soc_key in request.form and ocv_key in request.form:

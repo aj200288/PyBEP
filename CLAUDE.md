@@ -94,6 +94,21 @@ described by picture, that is where the picture is.
   its button for a charging battery, with Stop beside it. Stop calls
   `window.stop()`: it drops the browser's wait, it cannot call off the run the
   server has already started.
+- **Picking a file stages it; the column question is a dialog, not a page.**
+  A file input marked `js-stage-file` POSTs to `/columns` on change, which
+  saves the file, answers with a preview, and stores the guess as its
+  standing answer; the dialog in `_run_form.html` asks over the form and
+  `/columns/keep` records the reply. So "Run optimization" is the only button
+  in a run. `confirm.html` and `/confirm` are the fallback for a browser with
+  no `<dialog>`, no `fetch`, or a request that failed — `/upload` still
+  renders that page for any raw file that arrives with the form.
+- **Staged files get their own directory** (`staged_workdir`, manifest
+  `staged.json`), and a run *copies* out of it. `/upload` makes a fresh run
+  directory every time, and starting over empties the staged one; without the
+  copy, either would pull the files out from under a result still on screen
+  that `/adjust` can re-run. The manifest is a file rather than session data
+  because it grows with every file picked; the cookie already carries the
+  run's own list.
 - **`/adjust` is unreachable from the UI on purpose.** The button that posted
   there was removed; the route stays because it is the only path that re-runs
   without re-uploading, and the tests use it.

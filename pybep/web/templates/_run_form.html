@@ -7,9 +7,26 @@
 
   Expects: max_iterations, cathode_library, anode_library,
   battery_library, settings, battery_choice, chosen_cathodes,
-  chosen_anodes, carried. The two "chosen" lists are None on a first
-  visit, which means every curve is ticked.
+  chosen_anodes, staged. The two "chosen" lists are None on a first
+  visit, which means every curve is ticked; `staged` groups the files
+  already handed to the server by curve type.
 #}
+
+{% macro staged_list(curve_type, files) %}
+{# The files already on the server for one box, each with a way of taking
+   it back out. The script at the foot of this file redraws this from what
+   /columns and /columns/keep answer, so the markup it builds has to keep
+   the same shape as the markup here. #}
+<div class="staged-files" data-staged-for="{{ curve_type }}">
+  {% for f in files %}
+  <span class="staged-file" data-file-id="{{ f.file_id }}">
+    <span class="staged-name">{{ f.name }}</span>
+    <button type="button" class="staged-drop" data-drop="{{ f.file_id }}"
+            aria-label="Remove {{ f.name }}" title="Remove {{ f.name }}">&times;</button>
+  </span>
+  {% endfor %}
+</div>
+{% endmacro %}
 <main class="card">
   {# The brand is in the header now, so the card heading names the task. #}
   <div class="page-head">
@@ -42,20 +59,18 @@
         {% endfor %}
       </select>
       <div id="battery-upload">
-        <input id="battery_file" class="input-file" type="file" name="battery_file" required
-               accept=".txt,.csv,.xlsx"/>
+        {# Not `required` once a curve is already on the server: the box is
+           emptied as soon as its file is sent, and a required empty box
+           would then refuse to submit the form. #}
+        <input id="battery_file" class="input-file js-stage-file" type="file"
+               name="battery_file" accept=".txt,.csv,.xlsx"
+               {{ 'required' if not staged.battery else '' }}/>
         <span class="file-hint">The measured full-cell curve you want decomposed (.txt / .csv / .xlsx).</span>
-        {% if carried.battery %}
-        <span class="carried-note">
-          Still on the server from this session:
-          <strong>{{ carried.battery|join(', ') }}</strong>. A browser will not put
-          a file back into the box, so choose it again before running.
-        </span>
-        {% endif %}
+        {{ staged_list('battery', staged.battery) }}
       </div>
     </div>
 
-    {% macro candidate_group(kind, names, selected, field, upload_field, label, carried_names) %}
+    {% macro candidate_group(kind, names, selected, field, upload_field, label, staged_files) %}
     {% set ticked = names if selected is none else selected %}
     <div class="candidate-group">
       {# Collapsed by default: all of them are already selected, so the count
@@ -97,28 +112,23 @@
 
       <details class="extra-upload">
         <summary>Add your own {{ kind }} files</summary>
-        <input class="input-file" type="file" name="{{ upload_field }}" multiple
-               accept=".txt,.csv,.xlsx"/>
+        <input class="input-file js-stage-file" type="file" name="{{ upload_field }}"
+               multiple accept=".txt,.csv,.xlsx"/>
         <span class="file-hint">
           Only needed for a curve that isn't in the list above. Uploaded files are
           used for this run only — they are not added to the list.
         </span>
       </details>
-      {% if carried_names %}
-      <span class="carried-note">
-        Still on the server from this session:
-        <strong>{{ carried_names|join(', ') }}</strong>. A browser will not put
-        a file back into the box, so choose it again to include it in the
-        next run.
-      </span>
-      {% endif %}
+      {# Outside the panel above, so a file that has been handed over is
+         visible whether or not the panel happens to be open. #}
+      {{ staged_list(kind, staged_files) }}
     </div>
     {% endmacro %}
 
     {{ candidate_group('cathode', cathode_library, chosen_cathodes, 'library_cathodes',
-                       'cathode_files', 'Cathode candidates', carried.cathode) }}
+                       'cathode_files', 'Cathode candidates', staged.cathode) }}
     {{ candidate_group('anode', anode_library, chosen_anodes, 'library_anodes',
-                       'anode_files', 'Anode candidates', carried.anode) }}
+                       'anode_files', 'Anode candidates', staged.anode) }}
 
     {% with iterations=settings.iterations,
             battery_weight=settings.battery_weight,
@@ -136,6 +146,26 @@
     {% include "_running.html" %}
   </form>
 
+  {# The column question, asked over the form that asked for the file
+     rather than on a page of its own. Empty until the script below fills
+     it in from what /columns answers.
+
+     Outside the form above: a form cannot contain another one, and a
+     button inside that one would submit it. #}
+  <dialog class="column-dialog" id="column-dialog"
+          aria-labelledby="column-dialog-title">
+    <h2 id="column-dialog-title">Which column is which?</h2>
+    <p class="column-dialog-lead" id="column-dialog-lead"></p>
+    <div class="banner banner-error" id="column-dialog-note" hidden></div>
+    <div class="confirm-list" id="column-dialog-list"></div>
+    <div class="actions">
+      <button class="primary" type="button" id="column-dialog-keep" hidden>
+        Use these columns
+      </button>
+      <button class="secondary" type="button" id="column-dialog-cancel">Cancel</button>
+    </div>
+  </dialog>
+
   <script>
     // The file picker only appears for "Upload my own file". Its `required`
     // has to come off with it — a hidden required input blocks submission
@@ -144,8 +174,11 @@
       const own = document.getElementById('battery_choice').value === '';
       const box = document.getElementById('battery-upload');
       const input = document.getElementById('battery_file');
+      // A curve already on the server counts as one chosen: the box that
+      // sent it is empty again, and requiring it would block the run.
+      const held = document.querySelector('[data-staged-for="battery"] .staged-file');
       box.hidden = !own;
-      input.required = own;
+      input.required = own && !held;
       if (!own) input.value = '';
     }
     toggleBatteryUpload();
@@ -195,5 +228,265 @@
         CANDIDATE_FIELDS.forEach(field => updateCount(field));
       }, 0);
     });
+  </script>
+
+  <script>
+    // Picking a file sends it to the server there and then, and the column
+    // question is asked over this form instead of on a page after it. That
+    // is what keeps a run to one button: by the time "Run optimization" is
+    // pressed, every file the server holds already has its answer, so the
+    // run starts exactly as it does when every curve came from the library.
+    //
+    // All of it is optional. A browser with no <dialog> or no fetch stages
+    // nothing, the file stays in its box, and pressing Run posts it the way
+    // it always did — /upload then asks on a page of its own.
+    (function () {
+      const dialog = document.getElementById('column-dialog');
+      if (!dialog || typeof dialog.showModal !== 'function' || !window.fetch) return;
+
+      const STAGE_URL = '{{ url_for("main.columns") }}';
+      const KEEP_URL = '{{ url_for("main.columns_keep") }}';
+
+      const lead = document.getElementById('column-dialog-lead');
+      const note = document.getElementById('column-dialog-note');
+      const list = document.getElementById('column-dialog-list');
+      const keepButton = document.getElementById('column-dialog-keep');
+      const cancelButton = document.getElementById('column-dialog-cancel');
+
+      // The previews on show. Only these carry an answer back — anything
+      // else the server holds keeps the answer it already had.
+      let asking = [];
+
+      function post(url, body) {
+        return fetch(url, {method: 'POST', body, credentials: 'same-origin'})
+          .then(response => {
+            if (!response.ok) throw new Error(response.status);
+            return response.json();
+          });
+      }
+
+      function stagedIds() {
+        return [...document.querySelectorAll('.staged-file')]
+               .map(chip => chip.dataset.fileId);
+      }
+
+      // Redraws the named files under each box. textContent throughout:
+      // the names are the user's own and have never been through a
+      // template.
+      function drawStaged(groups) {
+        Object.keys(groups).forEach(curveType => {
+          const box = document.querySelector(`[data-staged-for="${curveType}"]`);
+          if (!box) return;
+          box.textContent = '';
+          groups[curveType].forEach(file => {
+            const chip = document.createElement('span');
+            chip.className = 'staged-file';
+            chip.dataset.fileId = file.file_id;
+
+            const name = document.createElement('span');
+            name.className = 'staged-name';
+            name.textContent = file.name;
+
+            const drop = document.createElement('button');
+            drop.type = 'button';
+            drop.className = 'staged-drop';
+            drop.dataset.drop = file.file_id;
+            drop.textContent = '\u00d7';
+            drop.title = `Remove ${file.name}`;
+            drop.setAttribute('aria-label', `Remove ${file.name}`);
+
+            chip.append(name, drop);
+            box.appendChild(chip);
+          });
+        });
+        // The battery box stops being required once it has sent its file.
+        toggleBatteryUpload();
+      }
+
+      // Keep exactly these files, and store the answers on show for them.
+      // One request behind three gestures: confirming keeps everything,
+      // cancelling keeps what was there before, removing keeps the rest.
+      function sendKeep(ids, withAnswers) {
+        const data = new FormData();
+        ids.forEach(id => data.append('keep', id));
+        if (withAnswers) {
+          asking.forEach(preview => {
+            const soc = document.getElementById(`soc_${preview.file_id}`);
+            const ocv = document.getElementById(`ocv_${preview.file_id}`);
+            if (soc && ocv) {
+              data.append(`soc_${preview.file_id}`, soc.value);
+              data.append(`ocv_${preview.file_id}`, ocv.value);
+            }
+          });
+        }
+        return post(KEEP_URL, data).then(payload => drawStaged(payload.staged));
+      }
+
+      function close() {
+        asking = [];
+        if (dialog.open) dialog.close();
+      }
+
+      function showWaiting(message) {
+        lead.textContent = message;
+        note.hidden = true;
+        note.textContent = '';
+        list.textContent = '';
+        keepButton.hidden = true;
+        cancelButton.textContent = 'Cancel';
+        if (!dialog.open) dialog.showModal();
+      }
+
+      // Something went wrong at the server end. Say which way out is
+      // still open rather than leaving a dialog with nothing in it.
+      function failed(heading, wayOut) {
+        asking = [];
+        list.textContent = '';
+        lead.textContent = heading;
+        note.hidden = false;
+        note.textContent = wayOut;
+        keepButton.hidden = true;
+        cancelButton.textContent = 'Close';
+        if (!dialog.open) dialog.showModal();
+      }
+
+      function picker(kind, label, preview, guess) {
+        const box = document.createElement('div');
+        const id = `${kind}_${preview.file_id}`;
+
+        const caption = document.createElement('label');
+        caption.htmlFor = id;
+        caption.textContent = label;
+
+        const select = document.createElement('select');
+        select.className = 'select-control';
+        select.id = id;
+        for (let c = 0; c < preview.n_cols; c++) {
+          const option = document.createElement('option');
+          option.value = c;
+          option.textContent = `col ${c}`;
+          option.selected = c === guess;
+          select.appendChild(option);
+        }
+
+        box.append(caption, select);
+        return box;
+      }
+
+      // The same card the confirmation page draws, built here instead —
+      // which is why it borrows that page's classes rather than new ones.
+      function card(preview) {
+        const wrap = document.createElement('div');
+        wrap.className = 'confirm-card';
+
+        const tag = document.createElement('span');
+        tag.className = 'curve-type-tag';
+        tag.textContent = preview.curve_type;
+
+        const title = document.createElement('h3');
+        title.textContent = preview.filename;
+
+        const table = document.createElement('table');
+        table.className = 'preview-table';
+        const head = table.createTHead().insertRow();
+        for (let c = 0; c < preview.n_cols; c++) {
+          const th = document.createElement('th');
+          th.textContent = `col ${c}`;
+          head.appendChild(th);
+        }
+        const body = table.createTBody();
+        preview.rows.forEach(row => {
+          const tr = body.insertRow();
+          row.forEach(value => { tr.insertCell().textContent = value; });
+        });
+
+        const row = document.createElement('div');
+        row.className = 'column-select-row';
+        row.append(picker('soc', 'SOC column', preview, preview.guess_soc),
+                   picker('ocv', 'OCV column', preview, preview.guess_ocv));
+
+        wrap.append(tag, title, table, row);
+        return wrap;
+      }
+
+      function show(payload) {
+        asking = payload.previews;
+        list.textContent = '';
+        payload.previews.forEach(preview => list.appendChild(card(preview)));
+
+        if (payload.errors.length) {
+          note.hidden = false;
+          note.textContent = payload.errors
+            .map(e => (e.filename ? `${e.filename}: ${e.message}` : e.message))
+            .join(' ');
+        }
+        if (!payload.previews.length) {
+          lead.textContent = 'Nothing there could be used.';
+          cancelButton.textContent = 'Close';
+          return;
+        }
+        lead.textContent = 'The first rows of each file, with the guess already '
+          + 'selected. Change it if the guess is wrong.';
+        keepButton.hidden = false;
+      }
+
+      document.querySelectorAll('.js-stage-file').forEach(input => {
+        input.addEventListener('change', () => {
+          if (!input.files || !input.files.length) return;
+          const data = new FormData();
+          [...input.files].forEach(file => data.append(input.name, file));
+          showWaiting(input.files.length > 1
+                      ? 'Reading your files…' : 'Reading your file…');
+
+          post(STAGE_URL, data).then(payload => {
+            // The server has them now, so the box is emptied. Left full it
+            // would send a second copy with the form, and the question
+            // would be asked all over again on the next page.
+            input.value = '';
+            drawStaged(payload.staged);
+            show(payload);
+          }).catch(() => failed(
+            'That could not be prepared here.',
+            'Leave the file where it is and press Run optimization — the '
+            + 'columns are confirmed on a page of their own instead.'));
+        });
+      });
+
+      keepButton.addEventListener('click', () => {
+        sendKeep(stagedIds(), true).then(close).catch(() => failed(
+          'Your choice could not be saved.',
+          'Running now uses the columns PyBEP guessed. Pick the file again '
+          + 'to have another go at changing them.'));
+      });
+
+      function cancel() {
+        const asked = asking.map(preview => preview.file_id);
+        close();
+        // Cancelling means the files this dialog asked about were never
+        // wanted, so they go rather than sitting on the server waiting to
+        // be included in the next run.
+        sendKeep(stagedIds().filter(id => !asked.includes(id)), false)
+          .catch(() => {});
+      }
+
+      cancelButton.addEventListener('click', cancel);
+      // Escape closes a dialog by itself; this makes it mean Cancel.
+      dialog.addEventListener('cancel', event => {
+        event.preventDefault();
+        cancel();
+      });
+
+      // Delegated: the chips are redrawn after every change, so a handler
+      // bound to one would not survive the next answer.
+      document.addEventListener('click', event => {
+        const drop = event.target.closest && event.target.closest('[data-drop]');
+        if (!drop) return;
+        event.preventDefault();
+        const going = drop.dataset.drop;
+        // Nothing on failure: the file really is still there, so the chip
+        // saying so is the truth.
+        sendKeep(stagedIds().filter(id => id !== going), false).catch(() => {});
+      });
+    })();
   </script>
 </main>

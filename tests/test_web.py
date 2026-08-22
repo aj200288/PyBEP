@@ -325,9 +325,9 @@ check("the collapsed summary says how many are selected",
 check("the front page keeps the results half of the page ready and empty",
       'class="placeholder"' in body and "results appear here" in body.lower(),
       [l.strip() for l in body.splitlines() if "placeholder" in l])
-check("nothing is carried over before anything has been uploaded",
-      "carried-note" not in body,
-      [l.strip() for l in body.splitlines() if "carried-note" in l])
+check("nothing is waiting before a file has been picked",
+      'class="staged-file"' not in body,
+      [l.strip() for l in body.splitlines() if "staged-file" in l])
 
 file_inputs = {re.search(r'name="(\w+)"', tag).group(1): tag
                for tag in re.findall(r"<input[^>]*type=\"file\"[^>]*>", body)}
@@ -517,13 +517,12 @@ check("the sliders start from the settings just used",
 check("the form carries the iteration ceiling with it",
       f'max="{MAX_ITERATIONS}" step="1"' in body,
       re.findall(r'<input id="slider-iterations"[^>]*>', body))
-# A browser will not refill a file input, so the box comes back empty and
-# a run started from there would go without the uploaded curve. Naming the
-# file is what stops that happening quietly.
-check("the uploaded file the form cannot show is named, not silently dropped",
-      "carried-note" in body
-      and os.path.splitext(os.path.basename(battery))[0] in body,
-      [l.strip() for l in body.splitlines() if "carried-note" in l])
+# A file sent with the form rather than picked into the dialog is never
+# staged, so there is nothing waiting afterwards — and the form must not
+# claim otherwise. (What the dialog leaves behind is checked further down.)
+check("a run confirmed on its own page leaves nothing waiting on the form",
+      'class="staged-file"' not in body,
+      [l.strip() for l in body.splitlines() if "staged-file" in l])
 check("no settings page of its own is left to navigate to",
       client.get("/adjust").status_code == 405 and 'href="/adjust"' not in body)
 
@@ -556,9 +555,9 @@ lib_only = client.post("/upload", data={
 }, content_type="multipart/form-data", follow_redirects=True).get_data(as_text=True)
 check("a new run wipes the previous run's uploads",
       not os.path.isdir(old_workdir), old_workdir)
-check("a library-only run has nothing to carry, so says nothing about files",
-      "carried-note" not in lib_only,
-      [l.strip() for l in lib_only.splitlines() if "carried-note" in l])
+check("a library-only run has no file waiting, so names none",
+      'class="staged-file"' not in lib_only,
+      [l.strip() for l in lib_only.splitlines() if "staged-file" in l])
 
 client.get("/")  # drop any flash left over before the checks below
 resp = client.post("/adjust", data={"iterations": "1", "slider_a": "0.5"},
@@ -582,6 +581,201 @@ resp = client.post("/upload", data={
 check("a run with no battery curve at all is rejected",
       "choose a battery OCV curve" in resp.get_data(as_text=True),
       re.findall(r"<li>(.*?)</li>", resp.get_data(as_text=True)))
+
+# --- picking a file: the question comes to the form -------------------
+# A file goes to the server the moment it is picked, is asked about over
+# the form, and is then run by the same button as everything else. The
+# JavaScript that drives that cannot run here, so this drives the two
+# routes it calls and checks what they leave behind.
+front = app.test_client().get("/").get_data(as_text=True)
+check("the form carries the dialog that asks about columns",
+      '<dialog class="column-dialog"' in front and "/columns" in front,
+      [l.strip() for l in front.splitlines() if "column-dialog" in l][:2])
+check("all three file boxes are marked for the script that sends them",
+      len(re.findall(r"<input[^>]*js-stage-file[^>]*>", front)) == 3,
+      re.findall(r"<input[^>]*js-stage-file[^>]*>", front))
+
+staging = app.test_client()
+r = staging.post("/columns", content_type="multipart/form-data",
+                 data={"battery_file": [upload_file(battery)]})
+check("picking a file answers with what the dialog needs, not with a page",
+      r.status_code == 200 and r.mimetype == "application/json",
+      (r.status_code, r.mimetype))
+picked = r.get_json()
+check("one file picked comes back as one preview and no errors",
+      len(picked["previews"]) == 1 and not picked["errors"], picked["errors"])
+
+preview = picked["previews"][0]
+# Cells arrive as text because a raw table can hold NaN, which json.dumps
+# writes as a bare NaN and JSON.parse then refuses to read.
+check("the preview carries the rows and the guess the dialog shows",
+      preview["n_cols"] >= 2 and preview["rows"]
+      and all(isinstance(cell, str)
+              for row in preview["rows"] for cell in row)
+      and preview["guess_soc"] != preview["guess_ocv"],
+      {k: preview[k] for k in ("n_cols", "guess_soc", "guess_ocv")})
+check("the file is named back for the form to show",
+      [f["name"] for f in picked["staged"]["battery"]]
+      == [os.path.basename(battery)], picked["staged"])
+check("but where it was written stays on the server",
+      all("path" not in f for f in picked["staged"]["battery"]),
+      picked["staged"]["battery"])
+
+held = staging.get("/").get_data(as_text=True)
+check("the form names the file it is holding",
+      'class="staged-file"' in held and os.path.basename(battery) in held,
+      [l.strip() for l in held.splitlines() if "staged-file" in l][:2])
+battery_box = re.search(r'<input id="battery_file"[^>]*>', held).group(0)
+check("and stops requiring the box that has just been emptied",
+      "required" not in battery_box, battery_box)
+
+r = staging.post("/columns/keep", data={
+    "keep": preview["file_id"],
+    f"soc_{preview['file_id']}": "0",
+    f"ocv_{preview['file_id']}": "1"})
+check("answering the question keeps the file",
+      r.status_code == 200 and len(r.get_json()["staged"]["battery"]) == 1,
+      (r.status_code, r.get_json()))
+
+# The point of all of it: one button, and no page in between.
+r = staging.post("/upload", content_type="multipart/form-data", data={
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1", "slider_a": "0.5"})
+check("pressing Run once is the whole run, with no column page in between",
+      r.status_code == 302 and r.headers["Location"].endswith("/"),
+      (r.status_code, r.headers.get("Location")))
+ran = staging.get("/").get_data(as_text=True)
+check("the results come up from that one press",
+      'src="data:image/png;base64,' in ran and "Lowest RMSD" in ran)
+with staging.session_transaction() as sess:
+    answered = {k: tuple(v) for k, v in (sess.get("choices") or {}).items()}
+    run_dir, wait_dir = sess["workdir"], sess["staged_workdir"]
+check("the run used the columns that were answered for",
+      answered == {preview["file_id"]: (0, 1)}, answered)
+check("the file is still named beside the results, ready to run again",
+      'class="staged-file"' in ran and os.path.basename(battery) in ran,
+      [l.strip() for l in ran.splitlines() if "staged-file" in l][:2])
+
+# The run copies rather than borrows, because the two directories are
+# emptied at different moments.
+check("the run works from its own copy of the file",
+      run_dir != wait_dir and os.path.isdir(os.path.join(run_dir, "battery")),
+      (run_dir, wait_dir))
+
+staging.get("/?reset=1")
+after_reset = staging.get("/").get_data(as_text=True)
+check("starting over empties the waiting room",
+      'class="staged-file"' not in after_reset,
+      [l.strip() for l in after_reset.splitlines() if "staged-file" in l])
+waiting_dir = os.path.join(wait_dir, "battery")
+check("and the file really goes, rather than being left unlisted",
+      not os.path.isdir(waiting_dir) or not os.listdir(waiting_dir),
+      os.listdir(waiting_dir) if os.path.isdir(waiting_dir) else "gone")
+r = staging.post("/adjust", data={"iterations": "1", "slider_a": "0.5"},
+                 follow_redirects=True)
+check("the run that was on screen still re-runs after that",
+      r.status_code == 200 and "Lowest RMSD" in r.get_data(as_text=True),
+      r.status_code)
+
+# A file box holds one choice at a time, and so does the server.
+swap = app.test_client()
+first = swap.post("/columns", content_type="multipart/form-data",
+                  data={"cathode_files": [upload_file(cathode)]}).get_json()
+second = swap.post("/columns", content_type="multipart/form-data",
+                   data={"cathode_files": [upload_file(anode)]}).get_json()
+check("picking again in a box replaces what was in it",
+      len(second["staged"]["cathode"]) == 1
+      and (second["staged"]["cathode"][0]["file_id"]
+           != first["staged"]["cathode"][0]["file_id"]),
+      second["staged"]["cathode"])
+with swap.session_transaction() as sess:
+    swap_dir = os.path.join(sess["staged_workdir"], "cathode")
+check("and the file it replaced goes off the disk with it",
+      len(os.listdir(swap_dir)) == 1, os.listdir(swap_dir))
+
+r = swap.post("/columns/keep", data={})
+check("taking the last file back out leaves nothing named",
+      r.get_json()["staged"]["cathode"] == [], r.get_json())
+check("and nothing on disk either", os.listdir(swap_dir) == [],
+      os.listdir(swap_dir))
+
+# Column numbers reach pandas by position, so one out of range would be a
+# 500 rather than a rejected form.
+guard = app.test_client()
+guarded = guard.post("/columns", content_type="multipart/form-data",
+                     data={"battery_file": [upload_file(battery)]}).get_json()
+bad_id = guarded["previews"][0]["file_id"]
+guard.post("/columns/keep", data={"keep": bad_id, f"soc_{bad_id}": "0",
+                                  f"ocv_{bad_id}": "99"})
+r = guard.post("/upload", content_type="multipart/form-data", data={
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1", "slider_a": "0.5"}, follow_redirects=True)
+check("a column that is not there is refused, not handed to pandas",
+      r.status_code == 200 and "Lowest RMSD" in r.get_data(as_text=True),
+      r.status_code)
+
+# The cap on candidates has to hold here too: without it a run could be
+# assembled one file at a time past the limit /upload checks.
+cap = app.config["MAX_CURVE_FILES"]
+many = app.test_client().post("/columns", content_type="multipart/form-data",
+                              data={"cathode_files": [upload_file(cathode)
+                                                      for _ in range(cap + 2)]})
+capped = many.get_json()
+check("more files than a run can take are turned away at the door",
+      len(capped["staged"]["cathode"]) == cap and capped["errors"],
+      (len(capped["staged"]["cathode"]), capped["errors"]))
+
+# The dropdown is the later word: a library curve picked after a file of
+# your own hides the box that file came from, so it cannot be what was
+# meant by the run.
+overridden = app.test_client()
+overridden.post("/columns", content_type="multipart/form-data",
+                data={"battery_file": [upload_file(battery)]})
+overridden.post("/upload", content_type="multipart/form-data", data={
+    "battery_choice": lib_batteries[0],
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1", "slider_a": "0.5"})
+with overridden.session_transaction() as sess:
+    used = sess.get("files") or []
+check("a library curve picked afterwards wins over the waiting file",
+      [m for m in used if m["curve_type"] == "battery"] == [], used)
+
+# Half and half: one file picked into the dialog, one arriving with the
+# form because the dialog never got it. The page asks about the second
+# only, and the run has to end up using both.
+mixed = app.test_client()
+mixed_staged = mixed.post("/columns", content_type="multipart/form-data",
+                          data={"cathode_files": [upload_file(cathode)]}).get_json()
+mixed_page = mixed.post("/upload", content_type="multipart/form-data", data={
+    "battery_file": [upload_file(battery)],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1", "slider_a": "0.5"}).get_data(as_text=True)
+asked = re.findall(r'name="soc_([0-9a-f]{32})"', mixed_page)
+check("a file already answered for is not asked about a second time",
+      len(asked) == 1
+      and asked[0] != mixed_staged["staged"]["cathode"][0]["file_id"],
+      (asked, mixed_staged["staged"]["cathode"]))
+mixed_run = mixed.post("/confirm", follow_redirects=True,
+                       data={f"soc_{asked[0]}": "0", f"ocv_{asked[0]}": "1"}
+                       ).get_data(as_text=True)
+check("and it still counts among the candidates the run compared",
+      re.search(r"1 cathode\(s\) (?:&times;|×) 1 anode\(s\)", mixed_run) is not None,
+      [l.strip() for l in mixed_run.splitlines() if "cathode(s)" in l])
+
+# No JavaScript, or a browser that could not reach /columns: the file
+# arrives with the form instead and the question gets a page of its own.
+fallback = app.test_client()
+r = fallback.post("/upload", content_type="multipart/form-data", data={
+    "battery_file": [upload_file(battery)],
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]],
+    "iterations": "1"})
+check("a file that never reached /columns still gets its question asked",
+      r.status_code == 200 and "Confirm columns" in r.get_data(as_text=True),
+      r.status_code)
 
 # --- format data flow -------------------------------------------------
 resp = client.post("/format", data={
@@ -853,9 +1047,9 @@ abandoned.post("/upload", content_type="multipart/form-data", data={
     "library_anodes": [lib_anodes[0]],
     "iterations": "1"})
 away = abandoned.get("/").get_data(as_text=True)
-check("an abandoned run leaves no files to be carried over",
-      "carried-note" not in away,
-      [l.strip() for l in away.splitlines() if "carried-note" in l])
+check("an abandoned run leaves no file waiting on the form",
+      'class="staged-file"' not in away,
+      [l.strip() for l in away.splitlines() if "staged-file" in l])
 
 # The stored view is JSON, and JSON has no tuples: without a conversion on
 # the way back the page would read [1, 701, 82, 982] where PyBEP has
