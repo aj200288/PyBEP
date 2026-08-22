@@ -437,6 +437,15 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 
 .candidate-group { text-align: left; display: grid; gap: 8px; }
 
+/* The same name-above-control shape as the battery dropdown, on a panel
+   that has no control to be a real <label> for. The grid gap above
+   supplies the space that label's own margin would. */
+.candidate-group > .group-label {
+  font-size: 0.87rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+
 .candidate-panel {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -452,7 +461,7 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   padding: 11px 14px;
   cursor: pointer;
   font-size: 0.87rem;
-  font-weight: 650;
+  font-weight: 500;
   color: var(--ink);
   border-radius: var(--radius-sm);
   /* Suppress the browser's own marker; .candidate-title draws one that

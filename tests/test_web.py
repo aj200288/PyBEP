@@ -313,6 +313,15 @@ check("every built-in curve has a box, ticked by default",
       and ticked.count("anodes") == len(lib_anodes),
       (ticked.count("cathodes"), ticked.count("anodes")))
 
+named = re.findall(
+    r'<span class="group-label">([^<]+)</span>.*?<details class="candidate-panel">',
+    body, re.S)
+check("each candidate group is named above its panel, as the battery box is",
+      named == ["Cathode candidates", "Anode candidates"], named)
+check("which leaves the panel saying what is inside it",
+      body.count('<span class="candidate-title">Built-in curves</span>') == 2,
+      re.findall(r'<span class="candidate-title">[^<]*</span>', body))
+
 panels = re.findall(r"<details class=\"candidate-panel\"([^>]*)>", body)
 check("candidate lists start collapsed, keeping the page short",
       len(panels) == 2 and not any("open" in p for p in panels), panels)

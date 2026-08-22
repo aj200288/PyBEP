@@ -73,11 +73,15 @@
     {% macro candidate_group(kind, names, selected, field, upload_field, label, staged_files) %}
     {% set ticked = names if selected is none else selected %}
     <div class="candidate-group">
+      {# The group's name sits above the panel, where the battery curve's
+         label sits above its dropdown, so the two read as the same kind
+         of thing. That leaves the panel free to say what is in it. #}
+      <span class="group-label">{{ label }}</span>
       {# Collapsed by default: all of them are already selected, so the count
          in the summary is all you need unless you want to change something. #}
       <details class="candidate-panel">
         <summary class="candidate-summary">
-          <span class="candidate-title">{{ label }}</span>
+          <span class="candidate-title">Built-in curves</span>
           <span class="candidate-badge" data-count-for="{{ field }}">
             {{ ticked|length }} of {{ names|length }} selected
           </span>
