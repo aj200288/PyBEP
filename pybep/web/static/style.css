@@ -871,7 +871,6 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 .staged-file {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
   max-width: 100%;
   padding: 4px 4px 4px 11px;
   border: 1px solid var(--border-strong);
@@ -883,18 +882,31 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 /* File names run long and have no spaces to break at. */
 .staged-name { overflow-wrap: anywhere; }
 
+/* A round target a little larger than the cross in it, which is what
+   makes it clickable at all — but only just larger. The cross is drawn
+   rather than typed because the x glyph is a maths symbol and brings the
+   spacing of one with it, on both sides, whatever the padding says. */
 .staged-drop {
   flex: none;
-  width: 16px;
-  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
   padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--muted);
-  font-size: 0.95rem;
-  line-height: 1;
   cursor: pointer;
+}
+.staged-drop svg {
+  width: 9px;
+  height: 9px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
 }
 .staged-drop:hover { background: var(--surface); color: var(--error); }
 .staged-drop:focus-visible { outline: none; box-shadow: var(--ring); }

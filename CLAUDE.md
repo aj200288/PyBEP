@@ -97,7 +97,9 @@ described by picture, that is where the picture is.
 - **Picking a file stages it; the column question is a dialog, not a page.**
   A file input marked `js-stage-file` POSTs to `/columns` on change, which
   saves the file, answers with a preview, and stores the guess as its
-  standing answer; the dialog in `_run_form.html` asks over the form and
+  standing answer. A candidate box adds to what it holds and drops a repeat
+  of the same filename; the battery box replaces, since a run has one
+  measured curve. The dialog in `_run_form.html` asks over the form and
   `/columns/keep` records the reply. So "Run optimization" is the only button
   in a run. `confirm.html` and `/confirm` are the fallback for a browser with
   no `<dialog>`, no `fetch`, or a request that failed — `/upload` still

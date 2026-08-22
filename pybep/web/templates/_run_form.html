@@ -26,8 +26,14 @@
   {% for f in files %}
   <span class="staged-file" data-file-id="{{ f.file_id }}">
     <span class="staged-name">{{ f.name }}</span>
+    {# Drawn rather than written: the x glyph carries the side bearings
+       of a maths symbol, which read as space nobody put there. #}
     <button type="button" class="staged-drop" data-drop="{{ f.file_id }}"
-            aria-label="Remove {{ f.name }}" title="Remove {{ f.name }}">&times;</button>
+            aria-label="Remove {{ f.name }}" title="Remove {{ f.name }}">
+      <svg viewBox="0 0 12 12" aria-hidden="true">
+        <path d="M2.5 2.5 9.5 9.5 M9.5 2.5 2.5 9.5"/>
+      </svg>
+    </button>
   </span>
   {% endfor %}
 </div>
@@ -134,8 +140,9 @@
           {{ staged_list(kind, staged_files) }}
         </div>
         <span class="file-hint">
-          Only needed for a curve that isn't in the list above. Uploaded files are
-          used for this run only — they are not added to the list.
+          Only needed for a curve that isn't in the list above. Picking again
+          adds to the ones already here. Uploaded files are used for this run
+          only — they are not added to the list.
         </span>
       </details>
     </div>
@@ -282,6 +289,10 @@
       const keepButton = document.getElementById('column-dialog-keep');
       const cancelButton = document.getElementById('column-dialog-cancel');
 
+      // The same cross the template draws, for the chips built here.
+      const CROSS = '<svg viewBox="0 0 12 12" aria-hidden="true">'
+                  + '<path d="M2.5 2.5 9.5 9.5 M9.5 2.5 2.5 9.5"/></svg>';
+
       // The previews on show. Only these carry an answer back — anything
       // else the server holds keeps the answer it already had.
       let asking = [];
@@ -329,7 +340,9 @@
             drop.type = 'button';
             drop.className = 'staged-drop';
             drop.dataset.drop = file.file_id;
-            drop.textContent = '\u00d7';
+            // A constant, not anything that came from the user — the name
+            // goes in by textContent above.
+            drop.innerHTML = CROSS;
             drop.title = `Remove ${file.name}`;
             drop.setAttribute('aria-label', `Remove ${file.name}`);
 

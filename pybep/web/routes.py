@@ -336,15 +336,22 @@ def columns():
         if not incoming:
             continue
 
-        # Picking again in a box replaces what was in it, the way the box
-        # itself does. Without this every change of mind would leave a
-        # file behind that the next run would quietly include.
-        entries = pipeline.drop_staged(
-            workdir, entries,
-            {e['file_id'] for e in entries if e.get('field') != field})
-
         if curve_type == 'battery':
-            incoming = incoming[:1]  # one measured curve per run
+            # One measured curve per run, so picking again replaces the
+            # one before it, the way the box itself does.
+            incoming = incoming[:1]
+            keep = {e['file_id'] for e in entries if e.get('field') != field}
+        else:
+            # A candidate box adds instead. A file picker cannot add to
+            # its own selection, so wanting a fourth file means opening it
+            # again and picking that one — and someone who instead picks
+            # all four again would otherwise stage three of them twice.
+            picked_again = {f.filename for f in incoming}
+            keep = {e['file_id'] for e in entries
+                    if e.get('field') != field
+                    or e['filename'] not in picked_again}
+        entries = pipeline.drop_staged(workdir, entries, keep)
+
         room = max_files - sum(1 for e in entries
                                if e['curve_type'] == curve_type)
         if len(incoming) > room:

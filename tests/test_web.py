@@ -649,6 +649,10 @@ check("the form names the file it is holding",
 row = re.search(r'for="battery_file">Browse….*?</div>', held, re.S).group(0)
 check("the name lands in the box, beside Browse",
       os.path.basename(battery) in row and "staged-empty" not in row, row[:220])
+check("each name comes with a way of taking it back out",
+      'class="staged-drop" data-drop=' in held
+      and f'aria-label="Remove {os.path.basename(battery)}"' in held,
+      [l.strip() for l in held.splitlines() if "staged-drop" in l])
 battery_box = re.search(r'<input id="battery_file"[^>]*>', held).group(0)
 check("and stops requiring the box that has just been emptied",
       "required" not in battery_box, battery_box)
@@ -702,21 +706,59 @@ check("the run that was on screen still re-runs after that",
       r.status_code == 200 and "Lowest RMSD" in r.get_data(as_text=True),
       r.status_code)
 
-# A file box holds one choice at a time, and so does the server.
+# A candidate box adds to what it holds: a file picker cannot add to its
+# own selection, so a second file means opening it again.
 swap = app.test_client()
-first = swap.post("/columns", content_type="multipart/form-data",
-                  data={"cathode_files": [upload_file(cathode)]}).get_json()
+swap.post("/columns", content_type="multipart/form-data",
+          data={"cathode_files": [upload_file(cathode)]})
 second = swap.post("/columns", content_type="multipart/form-data",
                    data={"cathode_files": [upload_file(anode)]}).get_json()
-check("picking again in a box replaces what was in it",
-      len(second["staged"]["cathode"]) == 1
-      and (second["staged"]["cathode"][0]["file_id"]
-           != first["staged"]["cathode"][0]["file_id"]),
+check("picking again in a candidate box keeps what was already there",
+      [f["name"] for f in second["staged"]["cathode"]]
+      == [os.path.basename(cathode), os.path.basename(anode)],
       second["staged"]["cathode"])
+
+# Which is also how someone ends up picking the whole set again, having
+# reopened the picker to add one to it.
+again = swap.post("/columns", content_type="multipart/form-data",
+                  data={"cathode_files": [upload_file(cathode),
+                                          upload_file(anode)]}).get_json()
+check("and a name picked a second time is one file, not two",
+      [f["name"] for f in again["staged"]["cathode"]]
+      == [os.path.basename(cathode), os.path.basename(anode)],
+      again["staged"]["cathode"])
 with swap.session_transaction() as sess:
     swap_dir = os.path.join(sess["staged_workdir"], "cathode")
-check("and the file it replaced goes off the disk with it",
-      len(os.listdir(swap_dir)) == 1, os.listdir(swap_dir))
+check("and the copies they stood in for go off the disk with them",
+      len(os.listdir(swap_dir)) == 2, os.listdir(swap_dir))
+
+# And a run compares every one of them, not only the last box-full.
+both = app.test_client()
+with open(cathode, "rb") as f:
+    cathode_bytes = f.read()
+for name in ("first_pick.txt", "second_pick.txt"):
+    both.post("/columns", content_type="multipart/form-data",
+              data={"cathode_files": [(io.BytesIO(cathode_bytes), name)]})
+both.post("/columns", content_type="multipart/form-data",
+          data={"battery_file": [upload_file(battery)]})
+both_run = both.post("/upload", content_type="multipart/form-data", follow_redirects=True,
+                     data={"library_anodes": [lib_anodes[0]],
+                           "iterations": "1", "slider_a": "0.5"}).get_data(as_text=True)
+check("both files picked into one box are compared, not just the later one",
+      re.search(r"2 cathode\(s\) (?:&times;|×) 1 anode\(s\)", both_run) is not None,
+      [l.strip() for l in both_run.splitlines() if "cathode(s)" in l])
+
+# The battery box is the one that replaces: a run has one measured curve.
+one = app.test_client()
+one.post("/columns", content_type="multipart/form-data",
+         data={"battery_file": [upload_file(battery)]})
+with open(battery, "rb") as f:
+    renamed = (io.BytesIO(f.read()), "a_different_curve.txt")
+only = one.post("/columns", content_type="multipart/form-data",
+                data={"battery_file": [renamed]}).get_json()
+check("the battery box still holds one curve, the one picked last",
+      [f["name"] for f in only["staged"]["battery"]] == ["a_different_curve.txt"],
+      only["staged"]["battery"])
 
 opened = swap.get("/").get_data(as_text=True)
 check("the panel holding a file opens, so the name is not shut inside it",
