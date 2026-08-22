@@ -858,6 +858,16 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
    what that box already says. */
 .file-picker:not(.is-drawn) .staged-files { display: none; }
 
+/* The names belong in the row, not in a box inside it. Held together as
+   one box they are one thing to fit: the moment a third name stops fitting
+   beside Browse, all three drop below it — including the two that fitted.
+   As items of the row itself they wrap one at a time, which is what a row
+   of names is expected to do.
+
+   The flex box below is what a browser that has never heard of `contents`
+   falls back to, and what the row is before the script draws it. */
+.file-picker.is-drawn .staged-files { display: contents; }
+
 .staged-files {
   display: flex;
   align-items: center;

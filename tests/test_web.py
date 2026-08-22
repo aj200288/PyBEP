@@ -656,6 +656,12 @@ check("the cross beside a name gives up the shared button width",
       drop_rule is not None and "min-width: 0" in drop_rule.group(1),
       drop_rule.group(1).strip() if drop_rule else "no .staged-drop rule")
 
+row_rule = re.search(r"\.file-picker\.is-drawn \.staged-files \{(.*?)\}",
+                     style, re.S)
+check("the names wrap one at a time, instead of dropping below Browse together",
+      row_rule is not None and "display: contents" in row_rule.group(1),
+      row_rule.group(1).strip() if row_rule else "no rule for the names in the row")
+
 check("each name comes with a way of taking it back out",
       'class="staged-drop" data-drop=' in held
       and f'aria-label="Remove {os.path.basename(battery)}"' in held,
