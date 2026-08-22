@@ -77,10 +77,14 @@ described by picture, that is where the picture is.
   run flow; the right-hand one is either the results or the placeholder in
   `index.html`. `.container` is a wrapping flex row — the `min-width` on
   `.graph-results` is what makes it wrap rather than crush.
-- **Refreshing means "start over".** `results.html` asks the browser how the
-  page was loaded (Navigation Timing), and a reload replaces itself with
-  `/?reset=1`. That sets `results_hidden`: the run is set aside, not deleted,
-  and a link on the empty panel brings it back. The logo goes to the same URL.
+- **Refreshing means "start over", on every page.** `_reload_reset.html`,
+  included from `base.html`, asks the browser how the page was loaded
+  (Navigation Timing), and a reload replaces itself with `/?reset=1` — the
+  same URL the logo goes to, so the two buttons do one thing. That sets
+  `results_hidden`: the run is set aside, not deleted, and a link on the empty
+  panel brings it back. On the pages a POST produces — Confirm columns, and
+  both Format Data steps — it also replaces the browser's "send the form
+  again?" dialog, and takes what is on them with it.
 - **Format Data keeps its own working directory** (`format_workdir`). Sharing
   one deleted results people were still reading.
 - **The six-hour idle sweep goes by directory mtime**, which does not move when

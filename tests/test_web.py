@@ -731,13 +731,48 @@ check("and the two flows keep their own directories",
       (sticky.get(fmt_links[0]).status_code, sticky.get("/download").status_code))
 
 # --- refreshing goes back to the starting instructions ----------------
-# The results page carries a script that spots a reload and sends the
-# browser to ?reset=1; there is no JavaScript here, so drive that URL
-# directly and check the script is on the page to drive it.
+# Every page carries a script that spots a reload and sends the browser to
+# ?reset=1, so the refresh button does what the logo does wherever it is
+# pressed. There is no JavaScript here, so check each page carries the
+# script to drive it, then drive that URL directly.
+
+
+def spots_a_reload(html):
+    # Not merely "reset=1" in the page: the logo's href says that too, so
+    # that much passes on a page carrying nothing but the logo.
+    return "getEntriesByType" in html and "replace('/?reset=1')" in html
+
+
 page = sticky.get("/").get_data(as_text=True)
 check("the results page can tell a reload from a navigation",
-      "getEntriesByType" in page and "reset=1" in page,
+      spots_a_reload(page),
       [l.strip() for l in page.splitlines() if "reset" in l])
+
+# The pages a POST produces are the ones a refresh used to land worst on:
+# the browser asked whether to send the form again.
+refresher = app.test_client()
+refreshable = {
+    "the front page": refresher.get("/"),
+    "the instructions": refresher.get("/help"),
+    "the Format Data form": refresher.get("/format"),
+    "an address that isn't there": refresher.get("/no-such-page"),
+    "Confirm columns": refresher.post(
+        "/upload", content_type="multipart/form-data",
+        data={"battery_file": [upload_file(battery)],
+              "library_cathodes": [lib_cathodes[0]],
+              "library_anodes": [lib_anodes[0]],
+              "iterations": "1"}),
+    "the Format Data columns": refresher.post(
+        "/format", content_type="multipart/form-data",
+        data={"data_files": [upload_file(cathode)], "curve_type": "cathode"}),
+    "the formatted files": refresher.post(
+        "/format/confirm", data={"soc_0": "0", "ocv_0": "1"}),
+}
+for where, response in refreshable.items():
+    refreshed = response.get_data(as_text=True)
+    check(f"a refresh on {where} starts over too", spots_a_reload(refreshed),
+          (response.status_code,
+           [l.strip() for l in refreshed.splitlines() if "reset=1" in l][:2]))
 
 r = sticky.get("/?reset=1", follow_redirects=True)
 empty = r.get_data(as_text=True)
