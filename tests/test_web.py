@@ -295,10 +295,11 @@ check("duplicate filenames get distinct keys, not silent overwrites",
       and _unique_key("LFP", {}) == "LFP")
 
 # --- built-in curve library -------------------------------------------
-from pybep.core import library_names  # noqa: E402
+from pybep.core import battery_library_names, library_names  # noqa: E402
 
 lib_cathodes = library_names("cathode")
 lib_anodes = library_names("anode")
+lib_batteries = battery_library_names()
 
 # Its own client: `client` has results by now, and / shows them.
 fresh = app.test_client()
@@ -371,11 +372,46 @@ check("and each ? has the words for its own field behind it",
 check("which stay behind it, rather than printing on the form",
       len(help_blocks) == 6 and all(" hidden" in b for b in help_blocks),
       help_blocks)
-anchors = [re.search(r'href="[^"#]*#([^"]+)"', dot).group(1) for dot in dots]
+dot_anchors = [re.search(r'href="[^"#]*#([^"]+)"', dot).group(1) for dot in dots]
 instructions = fresh.get("/help").get_data(as_text=True)
 check("and falls back to a part of the instructions that is really there",
-      len(anchors) == 6 and all(f'id="{a}"' in instructions for a in anchors),
-      [a for a in anchors if f'id="{a}"' not in instructions] or anchors)
+      len(dot_anchors) == 6
+      and all(f'id="{a}"' in instructions for a in dot_anchors),
+      [a for a in dot_anchors if f'id="{a}"' not in instructions] or dot_anchors)
+# What a file has to be belongs beside the box that takes it. Reading it
+# on the instructions page means leaving a form that may already have a
+# file on it, and coming back to find out about the next box means going
+# again.
+hints = [re.sub(r"\s+", " ", h).strip()
+         for h in re.findall(r'<span class="file-hint">(.*?)</span>', body, re.S)]
+picking = [h for h in hints
+           if "decomposed" in h or "isn't in the list above" in h]
+check("every place a file is picked says what one may be",
+      len(picking) == 3
+      and all(".txt, .csv or .xlsx" in h and "two columns" in h
+              for h in picking), picking)
+# An undefined name is an empty string in Jinja, so a cap that never
+# reached the template reads as "up to  MB" and says nothing at all.
+cap = str(app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024))
+caps = re.findall(r"up to\s+(\d+)\s+MB", body)
+check("and how large it may be, in the number rather than a gap",
+      len(caps) == 3 and set(caps) == {cap}, caps or "no size named")
+told = re.search(r'<div class="field-help" id="help-battery-curve"[^>]*>(.*?)</div>',
+                 body, re.S)
+check("and the ? on the battery curve offers a first run needing no file",
+      told is not None
+      and "Run optimization" in told.group(1)
+      and f"{len(lib_batteries)} measurements" in told.group(1),
+      re.sub(r"\s+", " ", told.group(1))[:220] if told else "no battery help")
+formatting = fresh.get("/format").get_data(as_text=True)
+check("and Format Data asks for a file in the same words the run form uses",
+      ".txt, .csv or .xlsx" in formatting and "two columns" in formatting,
+      [l.strip() for l in formatting.splitlines() if "file-hint" in l][:2])
+more = re.findall(r'<p class="field-help-more">\s*<a href="[^"#]*#([^"]+)"', body)
+check("and the way on to the rest of the instructions lands somewhere too",
+      len(more) == 3 and all(f'id="{a}"' in instructions for a in more),
+      more or "no way on")
+
 check("the dialog those dots open is on the page with them",
       'id="field-dialog"' in body and 'id="field-dialog-body"' in body,
       [l.strip() for l in body.splitlines() if "field-dialog" in l][:3])
@@ -519,9 +555,6 @@ check("every advertised format downloads",
           for f in RESULT_FORMATS), RESULT_FORMATS)
 
 # --- a run with no uploads at all --------------------------------------
-from pybep.core import battery_library_names  # noqa: E402
-
-lib_batteries = battery_library_names()
 home = fresh.get("/").get_data(as_text=True)
 options = re.findall(r'<option value="([^"]*)"', home)
 check("the battery dropdown offers upload first, then every bundled curve",

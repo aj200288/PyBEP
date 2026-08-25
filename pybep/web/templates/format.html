@@ -35,8 +35,9 @@
       <input id="data_files" class="input-file" type="file" name="data_files" multiple required
              accept=".txt,.csv,.xlsx"/>
       <span class="file-hint">
-        Up to {{ max_files }} files (.txt / .csv / .xlsx). All of them must be the same
-        curve type &mdash; format cathode, anode and battery files in separate batches.
+        Up to {{ max_files }} files, each two columns &mdash; state of charge and
+        voltage &mdash; as .txt, .csv or .xlsx. All of them must be the same curve
+        type; format cathode, anode and battery files in separate batches.
       </span>
     </div>
 

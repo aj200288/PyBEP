@@ -741,6 +741,7 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   text-align: left;
 }
 .field-dialog p:last-of-type { margin-bottom: 20px; }
+.field-dialog a { color: var(--blue); font-weight: 600; }
 /* One button, which has no business spanning the dialog. */
 .field-dialog .actions { justify-content: flex-end; }
 .field-dialog .actions button { flex: 0 0 auto; }

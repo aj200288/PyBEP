@@ -59,7 +59,11 @@ hand a real path to either one in a test.
 anodes × iterations. The caps in `pybep/web/__init__.py` — `MAX_ITERATIONS` 5,
 `MAX_CURVE_FILES` 12, `MAX_UPLOAD_BYTES` 32 MB, `DEFAULT_N_JOBS` 2 — are the
 only thing stopping one request from occupying the server indefinitely. Raise
-them only alongside a real job queue.
+them only alongside a real job queue. The run form quotes the file count and
+the upload cap — `_run_context()` passes them as `max_files` and
+`max_upload_mb` — so changing one changes what the page says. A Jinja name
+that never arrives renders as nothing, which is why a check counts the size
+in the page rather than looking for the words around it.
 
 **Screenshots go in `debug_images/`** (gitignored). When a UI problem is
 described by picture, that is where the picture is.

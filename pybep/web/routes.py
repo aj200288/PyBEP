@@ -114,6 +114,11 @@ def _form_context(from_session=True):
 
     return {
         'max_iterations': current_app.config['MAX_ITERATIONS'],
+        # Quoted on the form, where a file is picked, rather than only in
+        # the instructions: an upload refused for being too large is a
+        # wasted wait, and the cap is not guessable.
+        'max_files': current_app.config['MAX_CURVE_FILES'],
+        'max_upload_mb': current_app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024),
         'cathode_library': library_names('cathode'),
         'anode_library': library_names('anode'),
         'battery_library': battery_library_names(),

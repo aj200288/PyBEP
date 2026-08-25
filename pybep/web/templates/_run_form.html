@@ -5,9 +5,9 @@
   choices that produced them. Changing one setting and going again is then
   a single click, with the last graph still on screen next to it.
 
-  Expects: max_iterations, cathode_library, anode_library,
-  battery_library, settings, battery_choice, chosen_cathodes,
-  chosen_anodes, staged. The two "chosen" lists are None on a first
+  Expects: max_iterations, max_files, max_upload_mb, cathode_library,
+  anode_library, battery_library, settings, battery_choice,
+  chosen_cathodes, chosen_anodes, staged. The two "chosen" lists are None on a first
   visit, which means every curve is ticked; `staged` groups the files
   already handed to the server by curve type.
 #}
@@ -71,10 +71,24 @@
         closest to this one.
       </p>
       <p>
-        A file of your own needs two columns, state of charge and voltage, as
-        .txt, .csv or .xlsx; you are asked which column is which the moment
-        you pick it. The listed curves are there for trying a run without a
-        file of your own.
+        <strong>Nothing to upload yet?</strong> Pick one of the
+        {{ battery_library|length }} measurements already on the list and
+        press Run optimization. Nothing else needs setting, the run goes
+        through end to end, and you can see what comes back before preparing
+        anything of your own.
+      </p>
+      <p>
+        <strong>A file of your own</strong> is .txt, .csv or .xlsx, up to
+        {{ max_upload_mb }} MB, holding two numeric columns: state of charge
+        and voltage. Extra columns are fine — you are asked which two matter
+        the moment you pick the file. The separator and the decimal mark are
+        worked out for you, so <code>0,85</code> and <code>0.85</code> both
+        read; text above or below the numbers is ignored; and SOC may run
+        0–1 or 0–100.
+      </p>
+      <p class="field-help-more">
+        <a href="{{ url_for('main.help_page') }}#files"
+           target="_blank" rel="noopener">More on preparing files</a>
       </p>
       {% endcall %}
       <select class="select-control" id="battery_choice" name="battery_choice"
@@ -96,7 +110,10 @@
           <label class="file-picker-browse" for="battery_file">Browse…</label>
           {{ staged_list('battery', staged.battery, 'No file selected.') }}
         </div>
-        <span class="file-hint">The measured full-cell curve you want decomposed (.txt / .csv / .xlsx).</span>
+        <span class="file-hint">
+          The measured full-cell curve you want decomposed: two columns,
+          state of charge and voltage, as .txt, .csv or .xlsx.
+        </span>
       </div>
     </div>
 
@@ -129,7 +146,14 @@
       <p>
         {{ article }} {{ kind }} that is not on the list goes in under
         <em>Your own files</em> instead, and is used for that run only
-        rather than added to the list.
+        rather than added to the list. The same shape as any other curve:
+        .txt, .csv or .xlsx, up to {{ max_upload_mb }} MB, holding two
+        numeric columns — state of charge and voltage — and at most
+        {{ max_files }} files to a group.
+      </p>
+      <p class="field-help-more">
+        <a href="{{ url_for('main.help_page') }}#files"
+           target="_blank" rel="noopener">More on preparing files</a>
       </p>
       {% endcall %}
       {# Collapsed by default: all of them are already selected, so the count
@@ -199,7 +223,8 @@
         </div>
 
         <span class="file-hint">
-          Only needed for a curve that isn't in the list above. Picking again
+          Only needed for a curve that isn't in the list above: two columns,
+          state of charge and voltage, as .txt, .csv or .xlsx. Picking again
           adds to the ones already here. Uploaded files are used for this run
           only — they are not added to the list.
         </span>
