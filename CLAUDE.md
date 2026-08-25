@@ -93,7 +93,9 @@ described by picture, that is where the picture is.
 - **`js-long-run` + `_running.html`.** Submitting a form with that class swaps
   its button for a charging battery, with Stop beside it. Stop calls
   `window.stop()`: it drops the browser's wait, it cannot call off the run the
-  server has already started.
+  server has already started. The row the battery lands in divides its width
+  the same way the buttons did — wide, then one the width of its own label —
+  so nothing moves at the swap; a check compares the two `flex` values.
 - **Picking a file stages it; the column question is a dialog, not a page.**
   A file input marked `js-stage-file` POSTs to `/columns` on change, which
   saves the file, answers with a preview, and stores the guess as its

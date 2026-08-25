@@ -1267,6 +1267,27 @@ check("starting a run swaps the buttons for the battery, in place",
       and ".js-long-run.is-running .run-status" in css,
       rule.group(1).strip() if rule else "no .run-status rule")
 
+
+# And in place means the row does not change shape doing it: the battery
+# takes the width the pressed button had and Stop the width of the one
+# beside it, so the two rows have to divide the width the same way.
+def flex_of(selector):
+    block = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", css)
+    if not block:
+        return None
+    grow = re.search(r"\bflex:\s*([^;]+);", block.group(1))
+    return grow.group(1).strip() if grow else None
+
+
+split = {name: flex_of(name) for name in (
+    ".js-long-run .actions > .primary", ".run-status-bar",
+    ".js-long-run .actions > .secondary", ".run-stop")}
+check("and the buttons it stands in for divide the row the same way",
+      None not in split.values()
+      and split[".js-long-run .actions > .primary"] == split[".run-status-bar"]
+      and split[".js-long-run .actions > .secondary"] == split[".run-stop"],
+      split)
+
 # One button starts a run, on every page that can start one: a second
 # submit pointing somewhere else with formaction was how the form used to
 # offer a re-run, and it is not offered any more.

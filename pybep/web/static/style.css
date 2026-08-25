@@ -1045,6 +1045,15 @@ a.download-btn {
 /* Buttons are flex: 1, which would hand Stop half the row. */
 .run-stop { flex: 0 0 auto; }
 
+/* And the pair being replaced splits the row the same way, or pressing Run
+   changes the shape of the row it is in: Reset was half the card wide and
+   Stop, standing in its place, a fifth of it. Reset and Stop come out the
+   same width now — both are shorter than the 110px every button reserves.
+   Only the forms that raise a battery: elsewhere a row of two is two
+   equally weighted ways on, and reads better halved. */
+.js-long-run .actions > .primary { flex: 1 1 auto; }
+.js-long-run .actions > .secondary { flex: 0 0 auto; }
+
 .run-status-title {
   font-size: 0.9rem;
   font-weight: 650;
