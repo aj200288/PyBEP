@@ -76,7 +76,10 @@ described by picture, that is where the picture is.
 - **Two columns.** `_run_form.html` is the left-hand column of every page in the
   run flow; the right-hand one is either the results or the placeholder in
   `index.html`. `.container` is a wrapping flex row — the `min-width` on
-  `.graph-results` is what makes it wrap rather than crush.
+  `.graph-results` is what makes it wrap rather than crush. Inside the run
+  form, `_settings.html` is ruled off under a "Fitting" heading: the card
+  asks which curves to compare, then how to fit them, and without the break
+  those are six labels of one weight.
 - **Refreshing means "start over", on every page.** `_reload_reset.html`,
   included from `base.html`, asks the browser how the page was loaded
   (Navigation Timing), and a reload replaces itself with `/?reset=1` — the

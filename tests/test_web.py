@@ -341,6 +341,20 @@ check("the collapsed summary says how many are selected",
       badges == {"cathodes": f"{len(lib_cathodes)} of {len(lib_cathodes)}",
                  "anodes": f"{len(lib_anodes)} of {len(lib_anodes)}"}, badges)
 
+# The sliders decide how the fit is made, not which curves go into it,
+# and the form used to run the two together. The name has to have the
+# sliders under it, or it sits over nothing.
+fitting = re.search(r'<div class="form-section">(.*?)<div class="actions">',
+                    body, re.S)
+check("the fitting settings are a named section, ruled off from the curves",
+      fitting is not None
+      and ">Fitting</h2>" in fitting.group(1)
+      and all(f'id="{slider}"' in fitting.group(1)
+              for slider in ("slider-iterations", "slider-a", "slider-b")),
+      "no section before the buttons" if not fitting
+      else [l.strip() for l in fitting.group(1).splitlines()
+            if "form-section" in l or "slider-group" in l][:5])
+
 check("the front page keeps the results half of the page ready and empty",
       'class="placeholder"' in body and "results appear here" in body.lower(),
       [l.strip() for l in body.splitlines() if "placeholder" in l])
@@ -678,6 +692,10 @@ check("the names wrap one at a time, instead of dropping below Browse together",
 check("the upload summary is left to the panel rules, not the old link ones",
       ".extra-upload summary" not in style,
       [l.strip() for l in style.splitlines() if ".extra-upload" in l])
+section_rule = re.search(r"\.form-section \{([^}]*)\}", style)
+check("and the name of that section comes with a line under the last curve",
+      section_rule is not None and "border-top" in section_rule.group(1),
+      section_rule.group(1).strip() if section_rule else "no .form-section rule")
 chip_rule = re.search(r"\.staged-file \{(.*?)\}", style, re.S)
 check("and a filename is a label, not a status wearing the badge's wash",
       chip_rule is not None and "sky-wash" not in chip_rule.group(1),

@@ -272,6 +272,30 @@ p { margin: 0 0 24px; color: var(--muted); }
 
 .fields { display: grid; gap: 22px; margin-bottom: 26px; }
 
+/* Which curves to compare is one question; how to fit them is another,
+   and the form ran the two together as six labels of the same weight. A
+   rule and a name in a register no field label uses — small, spaced,
+   upper case — say where the first ends without adding another box to a
+   column that has boxes enough. */
+.form-section {
+  margin-top: 6px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.form-section-label {
+  margin: 0 0 14px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The section keeps the rhythm of the form it sits in, being one item of
+   it now rather than three. */
+.form-section-body { display: grid; gap: 22px; }
+
 /* --- Form controls --- */
 
 .file-group, .slider-group { text-align: left; }

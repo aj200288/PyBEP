@@ -4,27 +4,37 @@
 
   Expects: max_iterations, iterations, battery_weight, derivative_weight.
 #}
-<div class="slider-group">
-  <label for="slider-iterations">Iterations (1&ndash;{{ max_iterations }})</label>
-  <input id="slider-iterations" type="range" min="1" max="{{ max_iterations }}" step="1"
-         value="{{ iterations }}" name="iterations" oninput="syncSliderLabels()"/>
-  <div class="slider-value">Value: <span id="iterationsValue">{{ iterations }}</span></div>
-  <span class="file-hint">More iterations give more consistent results but take longer.</span>
-</div>
+{# The card asks two things: which curves to compare, and how to fit
+   them. Run on as one column of six labels that look alike, these three
+   read as three more curves to choose rather than the settings for the
+   search. A rule and a name for the second half is the whole of it — no
+   box, since the sliders sit on the card well enough as they are. #}
+<div class="form-section">
+  <h2 class="form-section-label">Fitting</h2>
+  <div class="form-section-body">
+    <div class="slider-group">
+      <label for="slider-iterations">Iterations (1&ndash;{{ max_iterations }})</label>
+      <input id="slider-iterations" type="range" min="1" max="{{ max_iterations }}" step="1"
+             value="{{ iterations }}" name="iterations" oninput="syncSliderLabels()"/>
+      <div class="slider-value">Value: <span id="iterationsValue">{{ iterations }}</span></div>
+      <span class="file-hint">More iterations give more consistent results but take longer.</span>
+    </div>
 
-<div class="slider-group">
-  <label for="slider-a">Battery weight (0&ndash;1, step 0.05)</label>
-  <input id="slider-a" type="range" min="0" max="1" step="0.05"
-         value="{{ battery_weight }}" name="slider_a" oninput="updateSliders('a')"/>
-  <div class="slider-value">Value: <span id="aValue">{{ "%.2f"|format(battery_weight) }}</span></div>
-</div>
+    <div class="slider-group">
+      <label for="slider-a">Battery weight (0&ndash;1, step 0.05)</label>
+      <input id="slider-a" type="range" min="0" max="1" step="0.05"
+             value="{{ battery_weight }}" name="slider_a" oninput="updateSliders('a')"/>
+      <div class="slider-value">Value: <span id="aValue">{{ "%.2f"|format(battery_weight) }}</span></div>
+    </div>
 
-<div class="slider-group">
-  <label for="slider-b">Differential capacity weight (0&ndash;1, step 0.05)</label>
-  <input id="slider-b" type="range" min="0" max="1" step="0.05"
-         value="{{ derivative_weight }}" oninput="updateSliders('b')"/>
-  <div class="slider-value">Value: <span id="bValue">{{ "%.2f"|format(derivative_weight) }}</span></div>
-  <span class="file-hint">The two weights always add up to 1 &mdash; moving one moves the other.</span>
+    <div class="slider-group">
+      <label for="slider-b">Differential capacity weight (0&ndash;1, step 0.05)</label>
+      <input id="slider-b" type="range" min="0" max="1" step="0.05"
+             value="{{ derivative_weight }}" oninput="updateSliders('b')"/>
+      <div class="slider-value">Value: <span id="bValue">{{ "%.2f"|format(derivative_weight) }}</span></div>
+      <span class="file-hint">The two weights always add up to 1 &mdash; moving one moves the other.</span>
+    </div>
+  </div>
 </div>
 
 <script>
