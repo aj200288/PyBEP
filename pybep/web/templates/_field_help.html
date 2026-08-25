@@ -1,0 +1,40 @@
+{#
+  The name of a field, a ? beside it, and the explanation behind the ?.
+
+    {% call help.field('iterations', 'Iterations (1–5)', 'slider-iterations') %}
+      <p>…</p>
+    {% endcall %}
+
+  writes the label, the dot, and — hidden — the words the dialog at the
+  foot of _run_form.html puts up when the dot is clicked. The words live
+  here, beside the field they explain, rather than in that script.
+
+  `topic` names the hidden block; `anchor` is the heading on the
+  instructions page the dot falls back to, and defaults to `topic`. Two
+  fields explained by one section of the instructions pass the same
+  anchor and different topics.
+
+  The dot is a link, not a button: a browser with no <dialog> follows it
+  to the instructions instead of doing nothing at all. In a new tab,
+  because navigating away would drop a file already picked.
+
+  Import it `{% import "_field_help.html" as help %}` — macros do not
+  cross an {% include %}, so a partial that wants this imports it too.
+#}
+{% macro field(topic, title, for_id=None, anchor=None) %}
+<div class="field-head">
+  {%- if for_id %}
+  <label for="{{ for_id }}">{{ title }}</label>
+  {%- else %}
+  <span class="group-label">{{ title }}</span>
+  {%- endif %}
+  <a class="help-dot help-dot-sm" data-help="help-{{ topic }}"
+     href="{{ url_for('main.help_page') }}#{{ anchor or topic }}"
+     target="_blank" rel="noopener"
+     title="About {{ title }}" aria-label="About {{ title }}">?</a>
+</div>
+<div class="field-help" id="help-{{ topic }}" hidden>
+  <h2>{{ title }}</h2>
+  {{ caller() }}
+</div>
+{% endmacro %}

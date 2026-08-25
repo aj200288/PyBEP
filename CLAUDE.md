@@ -115,6 +115,14 @@ described by picture, that is where the picture is.
   one was a blue link with a bordered box hanging open below it, and that box
   drew the eye harder than the list it is an alternative to. The file chips
   are neutral for the same reason: the blue wash belongs to the counts.
+- **A `?` beside every field name.** `_field_help.html` writes the label, the
+  dot, and — hidden next to the field — the words behind it; the dialog at the
+  foot of `_run_form.html` moves a copy in on click. The dot is an `<a>` to
+  the matching heading in the instructions *first*, so a browser with no
+  `<dialog>` gets an answer rather than nothing; a check confirms every one of
+  those anchors exists on `help.html`, since a stale one fails silently.
+  Macros do not cross an `{% include %}`, so `_settings.html` imports the file
+  for its three sliders as well.
 - **Staged files get their own directory** (`staged_workdir`, manifest
   `staged.json`), and a run *copies* out of it. `/upload` makes a fresh run
   directory every time, and starting over empties the staged one; without the

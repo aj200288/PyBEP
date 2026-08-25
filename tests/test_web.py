@@ -355,6 +355,31 @@ check("the fitting settings are a named section, ruled off from the curves",
       else [l.strip() for l in fitting.group(1).splitlines()
             if "form-section" in l or "slider-group" in l][:5])
 
+# A ? beside every field name, and behind each one the words for that
+# field. The dot is a link before it is anything else, so that a browser
+# with no <dialog> lands on the instructions instead of doing nothing —
+# and an anchor that has gone is a silent drop to the top of that page.
+dots = re.findall(r'<a class="help-dot help-dot-sm"[^>]*>', body, re.S)
+check("every field on the run form carries a ? of its own",
+      len(dots) == 6 and body.count('<div class="field-head">') == 6,
+      (len(dots), body.count('<div class="field-head">')))
+topics = re.findall(r'data-help="([^"]+)"', body)
+help_blocks = re.findall(r'<div class="field-help"[^>]*>', body)
+blocks = [re.search(r'id="([^"]+)"', b).group(1) for b in help_blocks]
+check("and each ? has the words for its own field behind it",
+      len(topics) == 6 and sorted(topics) == sorted(blocks), (topics, blocks))
+check("which stay behind it, rather than printing on the form",
+      len(help_blocks) == 6 and all(" hidden" in b for b in help_blocks),
+      help_blocks)
+anchors = [re.search(r'href="[^"#]*#([^"]+)"', dot).group(1) for dot in dots]
+instructions = fresh.get("/help").get_data(as_text=True)
+check("and falls back to a part of the instructions that is really there",
+      len(anchors) == 6 and all(f'id="{a}"' in instructions for a in anchors),
+      [a for a in anchors if f'id="{a}"' not in instructions] or anchors)
+check("the dialog those dots open is on the page with them",
+      'id="field-dialog"' in body and 'id="field-dialog-body"' in body,
+      [l.strip() for l in body.splitlines() if "field-dialog" in l][:3])
+
 check("the front page keeps the results half of the page ready and empty",
       'class="placeholder"' in body and "results appear here" in body.lower(),
       [l.strip() for l in body.splitlines() if "placeholder" in l])

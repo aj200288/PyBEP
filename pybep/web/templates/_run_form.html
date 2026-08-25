@@ -12,6 +12,8 @@
   already handed to the server by curve type.
 #}
 
+{% import "_field_help.html" as help %}
+
 {% macro staged_list(curve_type, files, empty='No files selected.') %}
 {# What one file box is holding, in the box's own row: the names, each
    with a way of taking it back out, or the words the browser would have
@@ -61,7 +63,20 @@
   <form class="fields js-long-run" method="POST" action="{{ url_for('main.upload') }}"
         enctype="multipart/form-data">
     <div class="file-group">
-      <label for="battery_choice">Battery OCV curve</label>
+      {% call help.field('battery-curve', 'Battery OCV curve', 'battery_choice') %}
+      <p>
+        Your measurement: the full-cell open-circuit voltage against state of
+        charge. Everything else on this page is measured against it — PyBEP
+        looks for the cathode and anode whose curves, put together, come
+        closest to this one.
+      </p>
+      <p>
+        A file of your own needs two columns, state of charge and voltage, as
+        .txt, .csv or .xlsx; you are asked which column is which the moment
+        you pick it. The listed curves are there for trying a run without a
+        file of your own.
+      </p>
+      {% endcall %}
       <select class="select-control" id="battery_choice" name="battery_choice"
               onchange="toggleBatteryUpload()">
         <option value="" {{ 'selected' if not battery_choice else '' }}>Upload my own file…</option>
@@ -90,8 +105,33 @@
     <div class="candidate-group">
       {# The group's name sits above the panel, where the battery curve's
          label sits above its dropdown, so the two read as the same kind
-         of thing. That leaves the panel free to say what is in it. #}
-      <span class="group-label">{{ label }}</span>
+         of thing. That leaves the panel free to say what is in it.
+
+         One explanation for both groups, in terms of which side of the
+         cell this one is: the two differ by three words. #}
+      {% set side = 'positive' if kind == 'cathode' else 'negative' %}
+      {% set other = 'anode' if kind == 'cathode' else 'cathode' %}
+      {% set article = 'A' if kind == 'cathode' else 'An' %}
+      {% call help.field(kind ~ '-candidates', label, none, 'candidates') %}
+      <p>
+        The {{ side }} electrodes to try against your curve. Every one ticked
+        here is paired with every ticked {{ other }}, each pair is fitted, and
+        the closest of them is the answer — so unticking a material that
+        cannot apply to your cell shortens the run as well as narrowing the
+        field.
+      </p>
+      <p>
+        A name is the material, then the DOI of the paper the curve came from
+        with <code>/</code> written as <code>_</code>; ones ending in
+        <code>-LICeM</code> were measured at the lab. Open the panel to read
+        the list and preview any curve in it.
+      </p>
+      <p>
+        {{ article }} {{ kind }} that is not on the list goes in under
+        <em>Your own files</em> instead, and is used for that run only
+        rather than added to the list.
+      </p>
+      {% endcall %}
       {# Collapsed by default: all of them are already selected, so the count
          in the summary is all you need unless you want to change something. #}
       <details class="candidate-panel">
@@ -207,6 +247,52 @@
       <button class="secondary" type="button" id="column-dialog-cancel">Cancel</button>
     </div>
   </dialog>
+
+  {# What the ? beside a field name puts up. Empty until one is clicked:
+     the words are written next to the field they explain, in the hidden
+     block _field_help.html leaves there, and a copy is moved in here. #}
+  <dialog class="field-dialog" id="field-dialog"
+          aria-labelledby="field-dialog-title">
+    <div id="field-dialog-body"></div>
+    <div class="actions">
+      <button class="secondary" type="button" id="field-dialog-close">Close</button>
+    </div>
+  </dialog>
+
+  <script>
+    // The ? beside a field name. Each one is a link to the instructions
+    // first — that is what a browser with no <dialog> follows, and it
+    // lands on the part that covers the field. Here it becomes a dialog
+    // over the form instead, so reading what a field is for costs none of
+    // the choices already made on it.
+    (function () {
+      const dialog = document.getElementById('field-dialog');
+      if (!dialog || typeof dialog.showModal !== 'function') return;
+
+      const body = document.getElementById('field-dialog-body');
+
+      document.querySelectorAll('a[data-help]').forEach(function (dot) {
+        dot.addEventListener('click', function (event) {
+          const source = document.getElementById(dot.dataset.help);
+          // Nothing to show: leave the link to the instructions alone.
+          if (!source) return;
+          event.preventDefault();
+          // A copy of what the template wrote, nodes and all — no markup
+          // is built here, and nothing from outside the page goes in.
+          const copy = source.cloneNode(true);
+          copy.removeAttribute('hidden');
+          copy.removeAttribute('id');
+          const heading = copy.querySelector('h2');
+          if (heading) heading.id = 'field-dialog-title';
+          body.replaceChildren(copy);
+          dialog.showModal();
+        });
+      });
+
+      document.getElementById('field-dialog-close')
+              .addEventListener('click', function () { dialog.close(); });
+    })();
+  </script>
 
   <script>
     // The file picker only appears for "Upload my own file". Its `required`

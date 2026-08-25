@@ -48,12 +48,12 @@
 
   <h2 id="optimization">Running an optimization</h2>
   <ol>
-    <li>
+    <li id="battery-curve">
       <strong>Choose the battery OCV curve.</strong> This is your measurement:
       the full-cell curve to be decomposed. Upload it, or pick one of the
       bundled examples.
     </li>
-    <li>
+    <li id="candidates">
       <strong>Check the candidates.</strong>
       {{ cathode_library|length }} reference cathodes and
       {{ anode_library|length }} reference anodes are built in and all selected
@@ -67,13 +67,13 @@
       files of yours; those are used for that run only and are not added to
       the shared list.
     </li>
-    <li>
+    <li id="iterations">
       <strong>Set iterations.</strong> The search starts from random points, so
       each run can land somewhere slightly different. More iterations repeat it
       and keep the best, trading time for consistency. Start at 1 while you are
       finding your way, raise it for a result you intend to keep.
     </li>
-    <li>
+    <li id="weights">
       <strong>Set the weights.</strong> These decide what &ldquo;closest&rdquo;
       means. <em>Battery weight</em> fits the voltage curve itself.
       <em>Differential capacity weight</em> fits its derivative instead, which

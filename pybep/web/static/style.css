@@ -191,6 +191,15 @@ p { margin: 0 0 24px; color: var(--muted); }
 }
 .help-dot:focus-visible { outline: none; box-shadow: var(--ring); }
 
+/* Beside a field name rather than beside the heading of the card, so it
+   has to be small enough not to be the thing read first. */
+.help-dot-sm {
+  width: 17px;
+  height: 17px;
+  font-size: 0.68rem;
+  border-color: var(--border);
+}
+
 /* --- Instructions page --- */
 
 .toc {
@@ -234,7 +243,7 @@ p { margin: 0 0 24px; color: var(--muted); }
    otherwise beat .primary/.secondary (0,1,0) and repaint button text. */
 .prose a:not(.link-button) { color: var(--blue); }
 
-.prose code {
+.prose code, .field-dialog code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.86em;
   background: var(--surface-sunk);
@@ -310,6 +319,19 @@ p { margin: 0 0 24px; color: var(--muted); }
   font-weight: 650;
   color: var(--ink);
 }
+
+/* A field's name and the ? that explains it, on one line. The margin
+   under the name moves to the row: left on the label, it would push the
+   name up off the middle of the dot. */
+.field-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+.field-head label, .field-head .group-label { margin-bottom: 0; }
+/* Except in the candidate groups, where the grid gap already spaces it. */
+.candidate-group > .field-head { margin-bottom: 0; }
 
 .file-hint {
   display: block;
@@ -464,7 +486,7 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 /* The same name-above-control shape as the battery dropdown, on a panel
    that has no control to be a real <label> for. The grid gap above
    supplies the space that label's own margin would. */
-.candidate-group > .group-label {
+.candidate-group .group-label {
   font-size: 0.87rem;
   font-weight: 650;
   color: var(--ink);
@@ -694,6 +716,34 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 /* While the file is still being read there are no cards yet, and the
    gap the list leaves would read as something failing to appear. */
 .column-dialog .confirm-list:empty { margin-bottom: 0; }
+
+/* What a ? beside a field name opens. Narrower than the column dialog:
+   this one holds prose, and prose across 720px is a tiring line. */
+.field-dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.field-dialog::backdrop {
+  background: rgba(0, 34, 63, .45);
+  backdrop-filter: blur(2px);
+}
+.field-dialog h2 { margin: 0 0 12px; font-size: 1.05rem; }
+.field-dialog p {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  text-align: left;
+}
+.field-dialog p:last-of-type { margin-bottom: 20px; }
+/* One button, which has no business spanning the dialog. */
+.field-dialog .actions { justify-content: flex-end; }
+.field-dialog .actions button { flex: 0 0 auto; }
 
 .column-select-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .column-select-row > div { flex: 1; min-width: 140px; }
