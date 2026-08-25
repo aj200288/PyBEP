@@ -321,6 +321,16 @@ check("each candidate group is named above its panel, as the battery box is",
 check("which leaves the panel saying what is inside it",
       body.count('<span class="candidate-title">Built-in curves</span>') == 2,
       re.findall(r'<span class="candidate-title">[^<]*</span>', body))
+# The two places a candidate curve can come from are one pair of panels
+# under one name. Uploading used to be a blue link with an open bordered
+# box under it, which outweighed the built-in list it stands beside.
+check("and the files of your own are a panel of the same kind beside it",
+      body.count('<span class="candidate-title">Your own files</span>') == 2
+      and body.count('<details class="candidate-panel extra-upload"') == 2,
+      re.findall(r'<span class="candidate-title">[^<]*</span>', body))
+added = re.findall(r'data-added-for="(\w+)">\s*([^<]+?)\s*</span>', body)
+check("which counts what it holds, as the other counts what is ticked",
+      added == [("cathode", "None added"), ("anode", "None added")], added)
 
 panels = re.findall(r"<details class=\"candidate-panel\"([^>]*)>", body)
 check("candidate lists start collapsed, keeping the page short",
@@ -662,6 +672,17 @@ check("the names wrap one at a time, instead of dropping below Browse together",
       row_rule is not None and "display: contents" in row_rule.group(1),
       row_rule.group(1).strip() if row_rule else "no rule for the names in the row")
 
+# `.extra-upload summary` is a tag inside a class and outranks
+# `.candidate-summary`: left behind, it paints the summary as the small
+# blue link it used to be, and draws a second chevron beside the panel's.
+check("the upload summary is left to the panel rules, not the old link ones",
+      ".extra-upload summary" not in style,
+      [l.strip() for l in style.splitlines() if ".extra-upload" in l])
+chip_rule = re.search(r"\.staged-file \{(.*?)\}", style, re.S)
+check("and a filename is a label, not a status wearing the badge's wash",
+      chip_rule is not None and "sky-wash" not in chip_rule.group(1),
+      chip_rule.group(1).strip() if chip_rule else "no .staged-file rule")
+
 check("each name comes with a way of taking it back out",
       'class="staged-drop" data-drop=' in held
       and f'aria-label="Remove {os.path.basename(battery)}"' in held,
@@ -775,8 +796,12 @@ check("the battery box still holds one curve, the one picked last",
 
 opened = swap.get("/").get_data(as_text=True)
 check("the panel holding a file opens, so the name is not shut inside it",
-      '<details class="extra-upload" open>' in opened,
+      '<details class="candidate-panel extra-upload" open>' in opened,
       [l.strip() for l in opened.splitlines() if "extra-upload" in l])
+opened_added = re.findall(r'data-added-for="cathode">\s*([^<]+?)\s*</span>',
+                          opened)
+check("and its count says how many, for when it is shut again",
+      opened_added == ["2 files added"], opened_added)
 
 r = swap.post("/columns/keep", data={})
 check("taking the last file back out leaves nothing named",

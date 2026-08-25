@@ -104,6 +104,12 @@ described by picture, that is where the picture is.
   in a run. `confirm.html` and `/confirm` are the fallback for a browser with
   no `<dialog>`, no `fetch`, or a request that failed — `/upload` still
   renders that page for any raw file that arrives with the form.
+- **Both ways of choosing a candidate are the same panel.** Under one group
+  label sit "Built-in curves" and "Your own files" — two `.candidate-panel`
+  rows, each with a count on it, so neither outweighs the other. The upload
+  one was a blue link with a bordered box hanging open below it, and that box
+  drew the eye harder than the list it is an alternative to. The file chips
+  are neutral for the same reason: the blue wash belongs to the counts.
 - **Staged files get their own directory** (`staged_workdir`, manifest
   `staged.json`), and a run *copies* out of it. `/upload` makes a fresh run
   directory every time, and starting over empties the staged one; without the

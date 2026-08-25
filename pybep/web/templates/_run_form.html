@@ -129,16 +129,35 @@
         </span>
       </details>
 
-      {# Open when it is holding something: the names are inside it, and
-         a file that has been handed over should not need looking for. #}
-      <details class="extra-upload" {{ 'open' if staged_files else '' }}>
-        <summary>Add your own {{ kind }} files</summary>
-        <div class="file-picker">
-          <input id="{{ upload_field }}" class="input-file js-stage-file" type="file"
-                 name="{{ upload_field }}" multiple accept=".txt,.csv,.xlsx"/>
-          <label class="file-picker-browse" for="{{ upload_field }}">Browse…</label>
-          {{ staged_list(kind, staged_files) }}
+      {# The other place a candidate curve can come from, so it is the
+         same panel as the first: two rows under one name, each saying what
+         it holds. As a blue link with an open box hanging below it, this
+         one drew the eye harder than the built-in list it is an alternative
+         to — a Browse button and a name for every file, against a single
+         shut row.
+
+         Open when it is holding something: the names are inside it, and a
+         file that has been handed over should not need looking for. #}
+      <details class="candidate-panel extra-upload"{{ ' open' if staged_files else '' }}>
+        <summary class="candidate-summary">
+          <span class="candidate-title">Your own files</span>
+          <span class="candidate-badge{{ '' if staged_files else ' candidate-badge-quiet' }}"
+                data-added-for="{{ kind }}">
+            {% if not staged_files %}None added
+            {% elif staged_files|length == 1 %}1 file added
+            {% else %}{{ staged_files|length }} files added{% endif %}
+          </span>
+        </summary>
+
+        <div class="candidate-upload">
+          <div class="file-picker">
+            <input id="{{ upload_field }}" class="input-file js-stage-file" type="file"
+                   name="{{ upload_field }}" multiple accept=".txt,.csv,.xlsx"/>
+            <label class="file-picker-browse" for="{{ upload_field }}">Browse…</label>
+            {{ staged_list(kind, staged_files) }}
+          </div>
         </div>
+
         <span class="file-hint">
           Only needed for a curve that isn't in the list above. Picking again
           adds to the ones already here. Uploaded files are used for this run
@@ -327,6 +346,17 @@
           // file just added to one would otherwise land out of sight.
           const panel = box.closest('details');
           if (panel && groups[curveType].length) panel.open = true;
+          // And while it is shut, the count on it is the only sign of what
+          // it holds — the same job the built-in panel's count does. The
+          // battery box has no panel and no count, hence the guard.
+          const added = document.querySelector(`[data-added-for="${curveType}"]`);
+          if (added) {
+            const n = groups[curveType].length;
+            added.textContent = n === 0 ? 'None added'
+                              : n === 1 ? '1 file added'
+                              : `${n} files added`;
+            added.classList.toggle('candidate-badge-quiet', n === 0);
+          }
           groups[curveType].forEach(file => {
             const chip = document.createElement('span');
             chip.className = 'staged-file';

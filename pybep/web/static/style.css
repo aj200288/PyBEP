@@ -495,12 +495,24 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   color: var(--warning);
   background: var(--warning-bg);
 }
+/* Nothing selected is a run that will be refused; nothing uploaded is
+   simply the usual case. Same pill, without the wash that says read me. */
+.candidate-badge-quiet {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 1px 9px;
+}
 
 .candidate-actions {
   display: flex;
   gap: 6px;
   padding: 2px 14px 10px;
 }
+
+/* The file box sits in from the panel edge the way the All/None buttons
+   in the other panel do, so the two panels open onto the same margin. */
+.candidate-upload { padding: 2px 14px 10px; }
 
 .candidate-panel > .file-hint { padding: 0 14px 12px; margin-top: 0; }
 
@@ -547,17 +559,14 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   background: #fff;
 }
 
-.extra-upload summary {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--blue);
-  padding: 2px 0;
-  margin-bottom: 8px;
-}
+/* "view curve" gets the same chevron as the candidate panels; the
+   browser's default triangle next to a custom one looks like a bug.
 
-/* The nested disclosures get the same chevron as the candidate panels;
-   the browser's default triangle next to a custom one looks like a bug. */
-.curve-peek summary, .extra-upload summary {
+   The upload disclosure was styled here too, as a small blue link. It is a
+   candidate panel now and takes its summary from those rules — which these
+   would outrank, being a tag inside a class: blue text at 0.8rem, and a
+   second chevron beside the one .candidate-title draws. */
+.curve-peek summary {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -565,10 +574,9 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   cursor: pointer;
   list-style: none;
 }
-.curve-peek summary::-webkit-details-marker,
-.extra-upload summary::-webkit-details-marker { display: none; }
+.curve-peek summary::-webkit-details-marker { display: none; }
 
-.curve-peek summary::before, .extra-upload summary::before {
+.curve-peek summary::before {
   content: "";
   border: solid currentColor;
   border-width: 0 1.5px 1.5px 0;
@@ -576,10 +584,9 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   transform: rotate(-45deg);
   transition: transform .15s ease;
 }
-.curve-peek[open] summary::before,
-.extra-upload[open] summary::before { transform: rotate(45deg); }
+.curve-peek[open] summary::before { transform: rotate(45deg); }
 
-.curve-peek summary:hover, .extra-upload summary:hover { color: var(--blue-dark); }
+.curve-peek summary:hover { color: var(--blue-dark); }
 
 /* --- Column confirmation --- */
 
@@ -809,7 +816,7 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
      bubble comes up at the box rather than at the corner of the page. */
   position: relative;
   padding: 8px 10px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--picker-border, var(--border-strong));
   border-radius: var(--radius-sm);
   background: var(--surface);
   transition: border-color .15s ease, box-shadow .15s ease;
@@ -820,6 +827,12 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   border-color: var(--blue);
   box-shadow: var(--ring);
 }
+
+/* Inside a panel the frame is already drawn, and a second strong line
+   14px in from the first reads as a box in a box. A variable rather than
+   a border-color, because a descendant selector would outrank the hover
+   and focus rules above and the row would stop answering to either. */
+.candidate-panel .file-picker.is-drawn { --picker-border: var(--border); }
 
 /* Clipped rather than display:none, which would take it out of the tab
    order and stop the label opening it. */
@@ -878,14 +891,18 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 
 .staged-empty { color: var(--muted); font-size: 0.85rem; }
 
+/* Quiet on purpose. In the blue wash the badges wear, five filenames
+   spoke as loudly as "7 of 7 selected" did, and the box holding them
+   outweighed the list of built-in curves it is an alternative to. A name
+   is a label, not a status. */
 .staged-file {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
   padding: 4px 4px 4px 11px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--sky-wash);
+  background: var(--surface-sunk);
   font-size: 0.79rem;
 }
 
