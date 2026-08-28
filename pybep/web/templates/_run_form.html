@@ -253,9 +253,9 @@
 
         {# A way through, and nothing else: the heading says what these
            are and the banner above says what that means. #}
-        <span class="file-hint">
-          <a href="{{ url_for('main.submit_form') }}">Submit your own curve</a>
-        </span>
+        <div class="panel-footer">
+          <a class="mini" href="{{ url_for('main.submit_form') }}">Submit your own curve</a>
+        </div>
       </details>
       {% endif %}
 

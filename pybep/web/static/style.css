@@ -333,10 +333,6 @@ p { margin: 0 0 24px; color: var(--muted); }
 /* Except in the candidate groups, where the grid gap already spaces it. */
 .candidate-group > .field-head { margin-bottom: 0; }
 
-/* A hint is quiet, but a way through to another page inside one still
-   has to look like one. */
-.file-hint a { color: var(--blue); font-weight: 600; }
-
 .file-hint {
   display: block;
   font-size: 0.8rem;
@@ -476,18 +472,25 @@ button:focus-visible { outline: none; box-shadow: var(--ring); }
   font-size: 0.9rem;
 }
 
-button.mini {
+/* A class rather than button.mini: one of these is a link to another
+   page, and an anchor has no border style of its own to colour, so the
+   shorthand is written out here in full. */
+.mini {
   flex: 0 0 auto;
   min-width: 0;
   padding: 4px 12px;
   font-size: 0.75rem;
   font-weight: 650;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--surface);
   color: var(--muted);
-  border-color: var(--border-strong);
+  font-family: inherit;
+  cursor: pointer;
 }
-button.mini:hover { color: var(--blue); border-color: var(--blue); background: var(--sky-wash); }
+a.mini { display: inline-block; text-decoration: none; line-height: 1.5; }
+.mini:hover { color: var(--blue); border-color: var(--blue); background: var(--sky-wash); }
+.mini:focus-visible { outline: none; box-shadow: var(--ring); }
 
 /* --- Built-in candidate curves --- */
 
@@ -579,6 +582,15 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
 .candidate-upload { padding: 2px 14px 10px; }
 
 .candidate-panel > .file-hint { padding: 0 14px 12px; margin-top: 0; }
+
+/* The way out of a panel and on to another page sits at its foot, hard
+   right, where a next step belongs — not in the reading column with the
+   text that explains what is above it. */
+.panel-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 14px 12px;
+}
 
 .candidate-list {
   padding: 0 8px;

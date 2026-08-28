@@ -1474,9 +1474,19 @@ check("with the curve in it, and not ticked",
       box.group(0) if box else "no checkbox for the submitted curve")
 check("and a way through to the page these came from",
       panel is not None
-      and re.search(r'<a href="/submit">Submit your own curve</a>', run_page)
-      is not None,
+      and '<a class="mini" href="/submit">Submit your own curve</a>' in run_page,
       [l.strip() for l in run_page.splitlines() if "/submit" in l][:2])
+# Both halves of "a button on the right" are in the stylesheet, where
+# nothing else here can see them: an anchor picks up none of the pill
+# styling if that rule goes back to naming the button element, and it
+# lands under the list rather than beside it without the row.
+footer_rule = re.search(r"\.panel-footer \{([^}]*)\}", style)
+check("and it sits at the right-hand end of the panel, not in the text column",
+      footer_rule is not None and "flex-end" in footer_rule.group(1),
+      footer_rule.group(1).strip() if footer_rule else "no .panel-footer rule")
+check("and the pill style is a class, so a link can be one too",
+      "button.mini {" not in style and ".mini {" in style,
+      [l.strip() for l in style.splitlines() if ".mini {" in l])
 check("and a preview that comes from the submitted folder, not the library",
       "/curve/submitted/cathode/NMC622-LICeM" in run_page
       and sender.get("/curve/submitted/cathode/NMC622-LICeM").status_code == 200,
