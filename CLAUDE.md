@@ -152,8 +152,10 @@ described by picture, that is where the picture is.
   import, which is what lets both test suites point it at a temp directory
   instead of the developer's own.
 - **Unverified is structural, not a badge.** Submitted curves get their own
-  `.candidate-panel` under each group heading — drawn only when there is
-  something in it — with their own field names (`submitted_cathodes`), never
+  `.candidate-panel` under each group heading — drawn like the two beside it,
+  not tinted; an amber panel read as an alarm going off mid-form, and the
+  heading plus the banner inside are the warning — drawn only when there is
+  something in it, with their own field names (`submitted_cathodes`), never
   ticked unless someone ticks them, and All/None in the built-in panel
   cannot reach them. `SUBMITTED_SUFFIX` goes onto the dictionary key, so a
   result names the unchecked curve that produced it and cannot collide with

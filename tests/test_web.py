@@ -1472,6 +1472,11 @@ box = re.search(r'<input type="checkbox" name="submitted_cathodes" value="NMC622
 check("with the curve in it, and not ticked",
       box is not None and "checked" not in box.group(1),
       box.group(0) if box else "no checkbox for the submitted curve")
+check("and a way through to the page these came from",
+      panel is not None
+      and re.search(r'<a href="/submit">Submit your own curve</a>', run_page)
+      is not None,
+      [l.strip() for l in run_page.splitlines() if "/submit" in l][:2])
 check("and a preview that comes from the submitted folder, not the library",
       "/curve/submitted/cathode/NMC622-LICeM" in run_page
       and sender.get("/curve/submitted/cathode/NMC622-LICeM").status_code == 200,

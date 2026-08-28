@@ -333,6 +333,10 @@ p { margin: 0 0 24px; color: var(--muted); }
 /* Except in the candidate groups, where the grid gap already spaces it. */
 .candidate-group > .field-head { margin-bottom: 0; }
 
+/* A hint is quiet, but a way through to another page inside one still
+   has to look like one. */
+.file-hint a { color: var(--blue); font-weight: 600; }
+
 .file-hint {
   display: block;
   font-size: 0.8rem;
@@ -562,19 +566,13 @@ button.mini:hover { color: var(--blue); border-color: var(--blue); background: v
   padding: 2px 14px 10px;
 }
 
-/* The one panel whose contents nobody has checked. Warm rather than blue:
-   the palette already uses the gold side for "read this before you go on",
-   and a curve from a stranger is exactly that. */
-.unverified-panel { border-color: var(--warning-border); }
-.unverified-panel[open] { background: var(--warning-bg); }
-.unverified-panel .candidate-summary:hover { background: var(--warning-bg); }
-.unverified-panel .candidate-title::before { border-color: var(--warning); }
-.unverified-panel .candidate-badge {
-  color: var(--warning);
-  background: var(--gold-wash);
-}
+/* The panel holding the unchecked curves is drawn like the two beside it.
+   Tinting the whole thing amber was tried and read as an alarm going off
+   in the middle of the form: the heading on it says "not verified" and
+   there is a banner inside saying what that means, which is the warning.
+   The one rule left here just sets that banner in from the panel edge,
+   the way the buttons and the hint are. */
 .unverified-panel > .banner { margin: 0 14px 10px; }
-.unverified-panel .candidate-row:hover { background: var(--gold-wash); }
 
 /* The file box sits in from the panel edge the way the All/None buttons
    in the other panel do, so the two panels open onto the same margin. */

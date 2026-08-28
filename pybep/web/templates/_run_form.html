@@ -251,10 +251,10 @@
           {% endfor %}
         </div>
 
+        {# A way through, and nothing else: the heading says what these
+           are and the banner above says what that means. #}
         <span class="file-hint">
-          Where these came from is on the
-          <a href="{{ url_for('main.submit_form') }}">Submit a curve</a> page.
-          None of them is ticked unless you tick it.
+          <a href="{{ url_for('main.submit_form') }}">Submit your own curve</a>
         </span>
       </details>
       {% endif %}
