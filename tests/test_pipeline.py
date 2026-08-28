@@ -13,6 +13,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from pybep.core import submissions
 from pybep.core.data_formatter import (
     read_raw_table, resolve_soc_ocv_columns, normalize_soc_scale,
     ensure_monotonic, load_ocv_curve, DataFormatError, guess_column_roles
@@ -212,6 +213,36 @@ with tempfile.TemporaryDirectory() as tmp:
     written = os.path.join(tmp, "out", report["successful"][0])
     rows = open(written).read().strip().splitlines()
     check("format_files writes 1001 rows", len(rows) == 1001, len(rows))
+
+# --- curves people send in ---------------------------------------------
+# A submission is stored under a name taken from the file it arrived as.
+# Through the website that has already been reduced to a basename, but
+# save_submission is a library call too, and there the name is whatever
+# the caller hands over.
+with tempfile.TemporaryDirectory() as tmp:
+    os.environ["PYBEP_SUBMISSIONS_DIR"] = tmp
+    try:
+        filed = submissions.save_submission(
+            "anode", "../escaped.txt", np.linspace(0.0, 1.0, 1001),
+            np.linspace(1.5, 0.1, 1001), {"submitter": "A Person"})
+        inside = sorted(os.listdir(os.path.join(tmp, "anode")))
+        check("a submitted curve cannot be written outside its own folder",
+              "/" not in filed and os.sep not in filed
+              and inside == [f"{filed}.json", f"{filed}.txt", "original"]
+              and not os.path.exists(os.path.join(tmp, "escaped.txt")),
+              (filed, inside))
+        check("and what was said about it is stored beside it",
+              submissions.read_metadata("anode", filed).get("submitter")
+              == "A Person", submissions.read_metadata("anode", filed))
+        check("a second curve of the same name is filed beside the first, "
+              "never over it",
+              submissions.save_submission(
+                  "anode", "escaped", np.linspace(0.0, 1.0, 1001),
+                  np.linspace(1.5, 0.1, 1001), {}) != filed
+              and len(submissions.submission_names("anode")) == 2,
+              submissions.submission_names("anode"))
+    finally:
+        os.environ.pop("PYBEP_SUBMISSIONS_DIR", None)
 
 n_pass = sum(1 for _, ok, _ in results if ok)
 n_fail = sum(1 for _, ok, _ in results if not ok)

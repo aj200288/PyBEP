@@ -65,6 +65,13 @@ the upload cap — `_run_context()` passes them as `max_files` and
 that never arrives renders as nothing, which is why a check counts the size
 in the page rather than looking for the words around it.
 
+**Submitted curves are permanent, public, and nobody has to log in.** They
+are written to `submitted/` rather than a session directory, and shown to
+every visitor. `MAX_SUBMISSIONS` (200) is the only thing between that form
+and a full disk: it is checked before an upload is accepted, and again when
+the page renders, which replaces the form with a notice once it is reached.
+Raise it only alongside somebody actually reviewing what arrives.
+
 **Screenshots go in `debug_images/`** (gitignored). When a UI problem is
 described by picture, that is where the picture is.
 
@@ -134,6 +141,24 @@ described by picture, that is where the picture is.
   that `/adjust` can re-run. The manifest is a file rather than session data
   because it grows with every file picked; the cookie already carries the
   run's own list.
+- **Curves people send in live outside the repository.** `submitted/<type>/`
+  holds `<name>.txt` (1001 points, in the same layout as everything in
+  `data/`), `<name>.json` (submitter, organization, DOI, date) and
+  `original/<name>.<ext>`, the file as uploaded, for whoever reviews it. No
+  database. Promoting a curve is `mv submitted/cathode/X.txt
+  data/cathode_data/` and a commit — which is why the default folder is
+  gitignored. `PYBEP_SUBMISSIONS_DIR` moves it, and
+  `pybep/core/submissions.py` reads that on every call rather than at
+  import, which is what lets both test suites point it at a temp directory
+  instead of the developer's own.
+- **Unverified is structural, not a badge.** Submitted curves get their own
+  `.candidate-panel` under each group heading — drawn only when there is
+  something in it — with their own field names (`submitted_cathodes`), never
+  ticked unless someone ticks them, and All/None in the built-in panel
+  cannot reach them. `SUBMITTED_SUFFIX` goes onto the dictionary key, so a
+  result names the unchecked curve that produced it and cannot collide with
+  a built-in of the same name. The battery dropdown holds both sources in
+  one `<select>`, so those values carry a `submitted:` prefix instead.
 - **`/adjust` is unreachable from the UI on purpose.** The button that posted
   there was removed; the route stays because it is the only path that re-runs
   without re-uploading, and the tests use it.

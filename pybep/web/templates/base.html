@@ -29,12 +29,15 @@
        string method on it directly. #}
     {% set endpoint = request.endpoint or '' %}
     {% set section = 'format' if endpoint.startswith('main.format')
-                     else ('help' if endpoint == 'main.help_page' else 'run') %}
+                     else ('submit' if endpoint.startswith('main.submit')
+                     else ('help' if endpoint == 'main.help_page' else 'run')) %}
     <nav class="site-nav">
       <a href="{{ url_for('main.index') }}"
          class="{{ 'is-active' if section == 'run' else '' }}">Run optimization</a>
       <a href="{{ url_for('main.format_form') }}"
          class="{{ 'is-active' if section == 'format' else '' }}">Format data</a>
+      <a href="{{ url_for('main.submit_form') }}"
+         class="{{ 'is-active' if section == 'submit' else '' }}">Submit a curve</a>
       <a href="{{ url_for('main.help_page') }}"
          class="{{ 'is-active' if section == 'help' else '' }}">Instructions</a>
     </nav>

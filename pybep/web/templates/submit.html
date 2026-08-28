@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %} &middot; Submit a curve{% endblock %}
+{% block content %}
+<main class="card card-wide">
+  <div class="page-head">
+    <h1>Submit a curve</h1>
+    <a class="help-dot" href="{{ url_for('main.help_page') }}#submitting"
+       target="_blank" rel="noopener"
+       title="Instructions (opens in a new tab)" aria-label="Instructions">?</a>
+  </div>
+  <p>
+    Send a cathode, anode or full-cell curve for other people to run against.
+    It goes up as soon as you submit it, marked <em>not verified</em>, and
+    stays marked that way until somebody at LICeM has checked it against the
+    paper it came from.
+  </p>
+
+  {% with messages = get_flashed_messages(category_filter=["success"]) %}
+    {% if messages %}
+    <div class="banner banner-success">
+      <ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  {% with messages = get_flashed_messages(category_filter=["error"]) %}
+    {% if messages %}
+    <div class="banner banner-error">
+      <ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  {# Said before the form rather than after it: by the time someone has
+     typed their name and picked a file, being told it will all be public
+     is too late to be a choice. #}
+  <div class="banner banner-warning">
+    Everything here is public. The curve, your name, your organization and the
+    DOI are shown to everyone who visits, and the file can be downloaded.
+    Submit only data you are free to share.
+  </div>
+
+  {% if full %}
+  <div class="banner banner-error">
+    This site is holding {{ stored }} submitted curves, which is as many as it
+    will take. Please get in touch with LICeM rather than submitting more.
+  </div>
+  {% else %}
+  <form class="fields" method="POST" action="{{ url_for('main.submit_run') }}"
+        enctype="multipart/form-data">
+    <div class="file-group">
+      <label for="curve_files">Curve files</label>
+      <input id="curve_files" class="input-file" type="file" name="curve_files"
+             multiple required accept=".txt,.csv,.xlsx"/>
+      <span class="file-hint">
+        Up to {{ max_files }} files, each two columns &mdash; state of charge and
+        voltage &mdash; as .txt, .csv or .xlsx, up to {{ max_upload_mb }} MB in
+        total. You are asked which columns are which on the next page.
+      </span>
+    </div>
+
+    <div class="file-group">
+      <label for="curve_type">What kind of curve</label>
+      <select class="select-control" id="curve_type" name="curve_type" required>
+        <option value="">Choose&hellip;</option>
+        <option value="cathode">Cathode &mdash; positive electrode</option>
+        <option value="anode">Anode &mdash; negative electrode</option>
+        <option value="battery">Battery OCV &mdash; full cell</option>
+      </select>
+      <span class="file-hint">
+        Every file in one submission is filed as this type. Send cathodes,
+        anodes and full cells separately.
+      </span>
+    </div>
+
+    <div class="file-group">
+      <label for="submitter">Your name</label>
+      <input id="submitter" class="text-control" type="text" name="submitter"
+             required maxlength="120" autocomplete="name"/>
+      <span class="file-hint">Shown beside the curve, so it is credited to you.</span>
+    </div>
+
+    <div class="file-group">
+      <label for="organization">Organization</label>
+      <input id="organization" class="text-control" type="text" name="organization"
+             required maxlength="120" autocomplete="organization"/>
+      <span class="file-hint">
+        The lab, institute or company the measurement belongs to.
+      </span>
+    </div>
+
+    <div class="file-group">
+      <label for="doi">DOI of the article the data came from</label>
+      <input id="doi" class="text-control" type="text" name="doi" maxlength="200"
+             placeholder="10.1016/j.xcrp.2020.100253"/>
+      <span class="file-hint">
+        Leave this empty for a measurement of your own that has not been
+        published. It is what lets somebody check the curve later.
+      </span>
+    </div>
+
+    <div class="actions">
+      <button class="primary" type="submit">Submit curves</button>
+      <button class="secondary" type="reset">Reset</button>
+    </div>
+  </form>
+  {% endif %}
+
+  <h2 id="submitted">Already submitted</h2>
+  {% if submissions %}
+  <p class="file-hint">
+    {{ stored }} of {{ max_submissions }} places used. These appear on the run
+    page under &ldquo;Submitted &mdash; not verified&rdquo;, unticked, in with
+    the curves of the same kind.
+  </p>
+  <div class="table-scroll">
+    <table class="submissions-table">
+      <thead>
+        <tr>
+          <th>Curve</th><th>Type</th><th>Submitted by</th><th>DOI</th><th>Added</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in submissions %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td><span class="curve-type-tag">{{ s.curve_type }}</span></td>
+          <td>
+            {{ s.submitter or '—' }}
+            {% if s.organization %}
+            <span class="submission-org">{{ s.organization }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {# The scheme is ours, so nothing typed into the box can turn
+               this into a link to somewhere else. #}
+            {% if s.doi %}
+            <a href="https://doi.org/{{ s.doi }}" target="_blank" rel="noopener">{{ s.doi }}</a>
+            {% else %}&mdash;{% endif %}
+          </td>
+          <td>{{ (s.submitted or '')[:10] or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="file-hint">Nothing has been sent in yet.</p>
+  {% endif %}
+</main>
+{% endblock %}

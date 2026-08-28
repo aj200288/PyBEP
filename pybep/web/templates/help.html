@@ -21,6 +21,7 @@
     <a href="#results">Reading the results</a>
     <a href="#files">Preparing your own files</a>
     <a href="#formatting">Formatting data</a>
+    <a href="#submitting">Submitting a curve</a>
     <a href="#limits">Limits and privacy</a>
   </nav>
 
@@ -251,6 +252,49 @@
     Download them before you refresh. Refreshing starts over, the same as
     clicking the PyBEP mark in the corner, and that clears the list of
     converted files along with the rest of the page.
+  </p>
+
+  <h2 id="submitting">Submitting a curve</h2>
+  <p>
+    <a href="{{ url_for('main.submit_form') }}">Submit a curve</a> adds a
+    cathode, anode or full-cell curve to this site for everybody to use. It is
+    kept on the server for good, not only for your session.
+  </p>
+  <ol>
+    <li>
+      <strong>Choose the files and say what they are.</strong> Up to
+      {{ max_submit_files }} at a time, all of the same kind, in the same
+      formats the rest of the site takes.
+    </li>
+    <li>
+      <strong>Say who you are.</strong> Your name and your organization are
+      required and are shown beside the curve, so it is credited and can be
+      asked about. The DOI is optional &mdash; leave it out for an unpublished
+      measurement of your own &mdash; but it is what lets somebody check the
+      curve against its source later.
+    </li>
+    <li>
+      <strong>Confirm the columns</strong>, exactly as when formatting.
+      Nothing is stored until you do.
+    </li>
+  </ol>
+  <p class="note">
+    <strong>Submitted curves are not verified.</strong> They appear on the run
+    page in a panel of their own, headed &ldquo;Submitted &mdash; not
+    verified&rdquo;, and are never ticked unless you tick them. Anyone can add
+    one and nobody has checked it, so look at the curve before trusting an
+    answer that used it &mdash; a result naming a curve with
+    <em>(submitted)</em> after it was fitted against one of these.
+  </p>
+  <p>
+    A curve joins the built-in set only by hand, once somebody at LICeM has
+    read the paper it came from and is satisfied it is right. Until then it
+    stays where it is, marked as it is.
+  </p>
+  <p class="note">
+    Everything sent in is public: the file can be downloaded, and the name,
+    the organization and the DOI are on the page. Send only data you are free
+    to share, and no more about yourself than the name you want credited.
   </p>
 
   <h2 id="limits">Limits and privacy</h2>

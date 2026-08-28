@@ -30,6 +30,16 @@ MAX_CURVE_FILES = 12
 # Total upload size across all files in one request.
 MAX_UPLOAD_BYTES = 32 * 1024 * 1024  # 32 MB
 
+# Curves people have sent in, kept on disk for good. Nobody has to log in
+# to add one, so this is the only thing between the site and a full disk:
+# past it, the form says so and stops accepting. Raise it once somebody is
+# actually reviewing what comes in.
+MAX_SUBMISSIONS = 200
+
+# How many files one person may send in one go. The same ceiling as a run
+# uses, for the same reason.
+MAX_SUBMIT_FILES = 12
+
 # Worker processes for the optimization. Small hosts report far more CPUs
 # than they actually let a container use, so joblib's default of "all
 # cores" (-1) oversubscribes and slows everything down. Override with
@@ -87,6 +97,8 @@ def create_app():
     app.config['MAX_ITERATIONS'] = MAX_ITERATIONS
     app.config['MIN_ITERATIONS'] = MIN_ITERATIONS
     app.config['MAX_CURVE_FILES'] = MAX_CURVE_FILES
+    app.config['MAX_SUBMISSIONS'] = MAX_SUBMISSIONS
+    app.config['MAX_SUBMIT_FILES'] = MAX_SUBMIT_FILES
     app.config['N_JOBS'] = _n_jobs()
 
     from . import routes

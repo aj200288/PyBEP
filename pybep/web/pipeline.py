@@ -32,6 +32,8 @@ from ..core import (
     build_curve_entry,
     format_files,
     library_curve_points,
+    save_submission,
+    submission_curve_points,
     perform_full_optimization_parallel,
     save_optimization_result_to_json,
     write_result_as,
@@ -284,15 +286,19 @@ def render_result_plot(battery_soc, battery_ocv, result):
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
-def render_curve_preview(curve_type, name):
+def render_curve_preview(curve_type, name, submitted=False):
     """
-    A small PNG of one library curve, so a user can see what a candidate
+    A small PNG of one stored curve, so a user can see what a candidate
     looks like before deciding whether to include it.
 
-    Returns None when the name isn't in the library, which the route turns
-    into a 404 rather than trusting the name enough to touch the disk.
+    Returns None when the name isn't among the curves of that kind, which
+    the route turns into a 404 rather than trusting the name enough to
+    touch the disk. `submitted` picks the folder people upload into
+    instead of the bundled library; either way the name is looked up, not
+    joined onto a path.
     """
-    points = library_curve_points(curve_type, name)
+    points = (submission_curve_points(curve_type, name) if submitted
+              else library_curve_points(curve_type, name))
     if points is None:
         return None
     x, y = points
@@ -309,6 +315,39 @@ def render_curve_preview(curve_type, name):
     fig.savefig(buf, format='png', dpi=110, bbox_inches='tight')
     plt.close(fig)
     return buf.getvalue()
+
+
+def store_submissions(paths, curve_type, column_choices, metadata,
+                      rejected=None):
+    """
+    Read each confirmed upload and file it away for good.
+
+    Returns (stored, failed, warnings). `stored` is the names the curves
+    were filed under, which are not always the names they arrived with —
+    a submission never overwrites one already there. One unreadable file
+    does not stop the rest, the same as formatting a batch.
+    """
+    stored = []
+    failed = dict(rejected or {})
+    warnings = {}
+
+    for path in paths:
+        label = original_name(os.path.basename(path))
+        try:
+            x_values, y_values, notes, _columns = load_ocv_curve(
+                path, curve_type, column_choice=column_choices.get(path))
+            name = save_submission(curve_type, label, x_values, y_values,
+                                   metadata, original_path=path,
+                                   original_filename=label)
+            stored.append(name)
+            if notes:
+                warnings[label] = notes
+        except DataFormatError as e:
+            failed[label] = str(e)
+        except Exception as e:
+            failed[label] = f"Unexpected error: {e}"
+
+    return stored, failed, warnings
 
 
 def result_download_path(workdir, fmt):

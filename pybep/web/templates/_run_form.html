@@ -6,8 +6,10 @@
   a single click, with the last graph still on screen next to it.
 
   Expects: max_iterations, max_files, max_upload_mb, cathode_library,
-  anode_library, battery_library, settings, battery_choice,
-  chosen_cathodes, chosen_anodes, staged. The two "chosen" lists are None on a first
+  anode_library, battery_library, cathode_submitted, anode_submitted,
+  battery_submitted, settings, battery_choice, chosen_cathodes,
+  chosen_anodes, chosen_submitted_cathodes, chosen_submitted_anodes,
+  staged. The two "chosen" lists are None on a first
   visit, which means every curve is ticked; `staged` groups the files
   already handed to the server by curve type.
 #}
@@ -94,9 +96,22 @@
       <select class="select-control" id="battery_choice" name="battery_choice"
               onchange="toggleBatteryUpload()">
         <option value="" {{ 'selected' if not battery_choice else '' }}>Upload my own file…</option>
-        {% for name in battery_library %}
-        <option value="{{ name }}" {{ 'selected' if name == battery_choice else '' }}>{{ name }}</option>
-        {% endfor %}
+        {# One control, two sources, so the value has to say which folder
+           it came from — a submitted curve and a built-in one may share a
+           name, and only one of them has been checked. #}
+        <optgroup label="Built-in curves">
+          {% for name in battery_library %}
+          <option value="{{ name }}" {{ 'selected' if name == battery_choice else '' }}>{{ name }}</option>
+          {% endfor %}
+        </optgroup>
+        {% if battery_submitted %}
+        <optgroup label="Submitted — not verified">
+          {% for name in battery_submitted %}
+          <option value="submitted:{{ name }}"
+                  {{ 'selected' if 'submitted:' ~ name == battery_choice else '' }}>{{ name }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endif %}
       </select>
       <div id="battery-upload">
         {# `required` here is for a browser that never runs the script
@@ -117,7 +132,8 @@
       </div>
     </div>
 
-    {% macro candidate_group(kind, names, selected, field, upload_field, label, staged_files) %}
+    {% macro candidate_group(kind, names, selected, field, upload_field, label,
+                             staged_files, submitted, chosen_submitted) %}
     {% set ticked = names if selected is none else selected %}
     <div class="candidate-group">
       {# The group's name sits above the panel, where the battery curve's
@@ -193,6 +209,56 @@
         </span>
       </details>
 
+      {# Curves people have sent in, when there are any. Their own panel
+         rather than rows in the list above: "not verified" has to be
+         structural, something you pick up before ticking anything, rather
+         than a badge to skim past — and All/None up there must not be able
+         to reach them. #}
+      {% if submitted %}
+      <details class="candidate-panel unverified-panel">
+        <summary class="candidate-summary">
+          <span class="candidate-title">Submitted — not verified</span>
+          <span class="candidate-badge{{ ' candidate-badge-quiet' if not chosen_submitted else '' }}"
+                data-count-for="submitted_{{ kind }}s" data-empty-ok>
+            {{ chosen_submitted|length }} of {{ submitted|length }} selected
+          </span>
+        </summary>
+
+        <div class="banner banner-warning">
+          Sent in by other people and checked by nobody. Look at the curve
+          before you trust an answer that used one.
+        </div>
+
+        <div class="candidate-actions">
+          <button type="button" class="mini" onclick="setAll('submitted_{{ kind }}s', true)">All</button>
+          <button type="button" class="mini" onclick="setAll('submitted_{{ kind }}s', false)">None</button>
+        </div>
+
+        <div class="candidate-list">
+          {% for name in submitted %}
+          <div class="candidate-item">
+            <label class="candidate-row">
+              <input type="checkbox" name="submitted_{{ kind }}s" value="{{ name }}"
+                     {{ 'checked' if name in chosen_submitted else '' }}/>
+              <span class="candidate-name">{{ name }}</span>
+            </label>
+            <details class="curve-peek">
+              <summary>view curve</summary>
+              <img loading="lazy" alt="{{ name }}"
+                   src="{{ url_for('main.submitted_curve_preview', curve_type=kind, name=name) }}"/>
+            </details>
+          </div>
+          {% endfor %}
+        </div>
+
+        <span class="file-hint">
+          Where these came from is on the
+          <a href="{{ url_for('main.submit_form') }}">Submit a curve</a> page.
+          None of them is ticked unless you tick it.
+        </span>
+      </details>
+      {% endif %}
+
       {# The other place a candidate curve can come from, so it is the
          same panel as the first: two rows under one name, each saying what
          it holds. As a blue link with an open box hanging below it, this
@@ -233,9 +299,11 @@
     {% endmacro %}
 
     {{ candidate_group('cathode', cathode_library, chosen_cathodes, 'library_cathodes',
-                       'cathode_files', 'Cathode candidates', staged.cathode) }}
+                       'cathode_files', 'Cathode candidates', staged.cathode,
+                       cathode_submitted, chosen_submitted_cathodes) }}
     {{ candidate_group('anode', anode_library, chosen_anodes, 'library_anodes',
-                       'anode_files', 'Anode candidates', staged.anode) }}
+                       'anode_files', 'Anode candidates', staged.anode,
+                       anode_submitted, chosen_submitted_anodes) }}
 
     {% with iterations=settings.iterations,
             battery_weight=settings.battery_weight,
@@ -343,15 +411,23 @@
 
     // The candidate panels start closed, so the count in the summary is the
     // only sign of what is selected - it has to stay accurate.
-    const CANDIDATE_FIELDS = ['library_cathodes', 'library_anodes'];
+    const CANDIDATE_FIELDS = ['library_cathodes', 'library_anodes',
+                              'submitted_cathodes', 'submitted_anodes'];
 
     function updateCount(field) {
+      const badge = document.querySelector(`[data-count-for="${field}"]`);
+      // The submitted panels are only drawn when something has been sent
+      // in, so two of the four fields are usually not on the page at all.
+      if (!badge) return;
       const boxes = document.querySelectorAll(`input[name="${field}"]`);
       const chosen = [...boxes].filter(box => box.checked).length;
-      const badge = document.querySelector(`[data-count-for="${field}"]`);
       badge.textContent = `${chosen} of ${boxes.length} selected`;
-      // Selecting none is rejected on submit; say so while the panel is shut.
-      badge.classList.toggle('candidate-badge-empty', chosen === 0);
+      // Ticking no built-in curves is rejected on submit, so say so while
+      // the panel is shut. Ticking no submitted ones is the normal case
+      // and gets the quiet outline instead of the warning wash.
+      const relaxed = badge.hasAttribute('data-empty-ok');
+      badge.classList.toggle('candidate-badge-empty', chosen === 0 && !relaxed);
+      badge.classList.toggle('candidate-badge-quiet', chosen === 0 && relaxed);
     }
 
     // With seven cathodes built in, narrowing to one candidate would

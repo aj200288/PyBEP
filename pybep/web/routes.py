@@ -16,6 +16,8 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 
 from ..core import (DataFormatError, library_names, select_library_curves,
                     battery_library_names, load_battery_library_curve,
+                    submission_names, submission_count, list_submissions,
+                    select_submitted_curves, load_submission,
                     RESULT_FORMATS, RESULT_MEDIA_TYPES)
 from . import pipeline
 
@@ -23,6 +25,24 @@ bp = Blueprint('main', __name__)
 
 CURVE_TYPES = ('cathode', 'anode', 'battery')
 CANDIDATE_TYPES = ('cathode', 'anode')
+
+# Curves people have sent in sit in their own folder and are shown as
+# unverified. They reach a run through their own form fields, so a name
+# from one source can never be read out of the other — and the suffix
+# keeps the two apart in the candidate dictionary, so a result names the
+# unverified curve that produced it rather than looking like a built-in.
+SUBMITTED_SUFFIX = ' (submitted)'
+
+# The battery dropdown holds both sources in one control, so that one
+# needs the source spelled out in the value.
+SUBMITTED_PREFIX = 'submitted:'
+
+
+def _battery_source(choice):
+    """('library'|'submitted', name) for what the battery dropdown sent."""
+    if choice.startswith(SUBMITTED_PREFIX):
+        return 'submitted', choice[len(SUBMITTED_PREFIX):]
+    return 'library', choice
 
 # The file boxes on the run form, and the kind of curve each one holds.
 # /columns goes by this, so a field name arriving from the browser can
@@ -102,11 +122,12 @@ def _form_context(from_session=True):
     """
     if from_session:
         chosen = session.get('library') or {}
+        sent = session.get('submitted') or {}
         battery_choice = session.get('battery_choice') or ''
         settings = session.get('settings') or DEFAULT_SETTINGS
         staged = _staged_groups(_staged())
     else:
-        chosen, battery_choice = {}, ''
+        chosen, sent, battery_choice = {}, {}, ''
         settings = DEFAULT_SETTINGS
         # Starting over throws the waiting files away too, so an empty
         # list here is the truth rather than a page hiding them.
@@ -122,10 +143,17 @@ def _form_context(from_session=True):
         'cathode_library': library_names('cathode'),
         'anode_library': library_names('anode'),
         'battery_library': battery_library_names(),
+        'cathode_submitted': submission_names('cathode'),
+        'anode_submitted': submission_names('anode'),
+        'battery_submitted': submission_names('battery'),
         # None rather than [] when there is no previous run: the template
         # reads that as "tick everything", which is the first-visit state.
         'chosen_cathodes': chosen.get('cathode'),
         'chosen_anodes': chosen.get('anode'),
+        # Never None: nothing unverified is ticked unless someone ticked
+        # it, on a first visit or any other.
+        'chosen_submitted_cathodes': sent.get('cathode') or [],
+        'chosen_submitted_anodes': sent.get('anode') or [],
         'battery_choice': battery_choice,
         # A copy: a caller that ever edited what it was handed would
         # otherwise rewrite the defaults for every session in the process.
@@ -234,6 +262,15 @@ def _unique_key(label, existing):
     return f"{label} ({n})"
 
 
+def _chosen_submitted(field, curve_type):
+    """
+    The submitted curves ticked on the form, filtered against what is
+    really on disk — the same rule the library selection follows.
+    """
+    available = set(submission_names(curve_type))
+    return [n for n in request.form.getlist(field) if n in available]
+
+
 def _chosen_library(field, curve_type):
     """
     The library curves ticked on the form, filtered against the real
@@ -301,6 +338,7 @@ def help_page():
         'help.html',
         max_iterations=current_app.config['MAX_ITERATIONS'],
         max_files=current_app.config['MAX_CURVE_FILES'],
+        max_submit_files=current_app.config['MAX_SUBMIT_FILES'],
         max_upload_mb=current_app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024),
         cathode_library=library_names('cathode'),
         anode_library=library_names('anode'),
@@ -451,6 +489,8 @@ def upload():
     # your own is optional and only needed for a curve that isn't there.
     library_cathodes = _chosen_library('library_cathodes', 'cathode')
     library_anodes = _chosen_library('library_anodes', 'anode')
+    submitted_cathodes = _chosen_submitted('submitted_cathodes', 'cathode')
+    submitted_anodes = _chosen_submitted('submitted_anodes', 'anode')
     cathode_files = _uploaded('cathode_files')
     anode_files = _uploaded('anode_files')
 
@@ -470,15 +510,21 @@ def upload():
     def staged_count(curve_type):
         return sum(1 for e in staged if e['curve_type'] == curve_type)
 
-    if battery_choice and battery_choice not in battery_library_names():
-        flash("That battery OCV curve isn't one of the available files.", "error")
-        return redirect(url_for('main.index'))
+    if battery_choice:
+        source, battery_name = _battery_source(battery_choice)
+        known = (submission_names('battery') if source == 'submitted'
+                 else battery_library_names())
+        if battery_name not in known:
+            flash("That battery OCV curve isn't one of the available files.", "error")
+            return redirect(url_for('main.index'))
     if not battery_choice and not battery_files and not staged_count('battery'):
         flash("Please choose a battery OCV curve, or upload your own file.", "error")
         return redirect(url_for('main.index'))
 
-    n_cathodes = len(library_cathodes) + len(cathode_files) + staged_count('cathode')
-    n_anodes = len(library_anodes) + len(anode_files) + staged_count('anode')
+    n_cathodes = (len(library_cathodes) + len(submitted_cathodes)
+                  + len(cathode_files) + staged_count('cathode'))
+    n_anodes = (len(library_anodes) + len(submitted_anodes)
+                + len(anode_files) + staged_count('anode'))
     if not n_cathodes or not n_anodes:
         flash("Please keep at least one cathode candidate and one anode candidate "
               "selected, or upload your own.", "error")
@@ -495,6 +541,8 @@ def upload():
     session['workdir'] = workdir
     session['settings'] = _clamp_settings(request.form)
     session['library'] = {'cathode': library_cathodes, 'anode': library_anodes}
+    session['submitted'] = {'cathode': submitted_cathodes,
+                            'anode': submitted_anodes}
     session['battery_choice'] = battery_choice or None
 
     previews = []
@@ -644,15 +692,30 @@ def _run_and_store(files_meta, choices, settings, workdir):
     # Start from the library selection made on the front page, then layer
     # any uploaded candidates on top of it.
     chosen = session.get('library') or {'cathode': [], 'anode': []}
+    sent = session.get('submitted') or {'cathode': [], 'anode': []}
     cathodes = dict(select_library_curves('cathode', chosen.get('cathode', [])))
     anodes = dict(select_library_curves('anode', chosen.get('anode', [])))
+    # Curves people sent in are candidates like any other, but they carry
+    # the label into the result: an answer has to say when the curve
+    # behind it is one nobody has checked.
+    cathodes.update(select_submitted_curves(
+        'cathode', sent.get('cathode', []), label=SUBMITTED_SUFFIX))
+    anodes.update(select_submitted_curves(
+        'anode', sent.get('anode', []), label=SUBMITTED_SUFFIX))
     battery_soc = battery_ocv = None
     warnings = []
     errors = []
 
     battery_name = session.get('battery_choice')
     if battery_name:
-        loaded = load_battery_library_curve(battery_name)
+        source, name = _battery_source(battery_name)
+        if source == 'submitted':
+            try:
+                loaded = load_submission('battery', name)
+            except (DataFormatError, OSError, ValueError) as e:
+                loaded, _ = None, errors.append(str(e))
+        else:
+            loaded = load_battery_library_curve(name)
         if loaded is not None:
             battery_soc, battery_ocv = loaded
 
@@ -718,6 +781,25 @@ def curve_preview(curve_type, name):
     return response
 
 
+@bp.route('/curve/submitted/<curve_type>/<name>')
+def submitted_curve_preview(curve_type, name):
+    """
+    The same preview for a curve somebody sent in.
+
+    Its own route rather than a flag on the one above: the two folders
+    can hold the same name, and a curve nobody has checked should never
+    be reachable by asking for a library one.
+    """
+    if curve_type not in CANDIDATE_TYPES:
+        abort(404)
+    png = pipeline.render_curve_preview(curve_type, name, submitted=True)
+    if png is None:
+        abort(404)
+    # Not cached: unlike the library, this folder changes while the
+    # server is running.
+    return current_app.response_class(png, mimetype='image/png')
+
+
 @bp.route('/download')
 def download():
     workdir = _session_workdir()
@@ -734,6 +816,150 @@ def download():
     return send_file(path, as_attachment=True,
                      download_name=f'pybep_result.{fmt}',
                      mimetype=RESULT_MEDIA_TYPES[fmt])
+
+
+# --- Curves people send in --------------------------------------------
+# Kept on disk for good and shown everywhere as unverified, until somebody
+# at the lab has looked at one and moved its file into data/ by hand.
+
+def _submit_context(**extra):
+    """Everything the submission page needs, plus whatever is passed in."""
+    stored = submission_count()
+    limit = current_app.config['MAX_SUBMISSIONS']
+    context = {
+        'submissions': list_submissions(),
+        'stored': stored,
+        'max_submissions': limit,
+        'full': stored >= limit,
+        'max_files': current_app.config['MAX_SUBMIT_FILES'],
+        'max_upload_mb': current_app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024),
+    }
+    context.update(extra)
+    return context
+
+
+@bp.route('/submit')
+def submit_form():
+    return render_template('submit.html', **_submit_context())
+
+
+@bp.route('/submit', methods=['POST'])
+def submit_run():
+    """
+    Take the files and who they came from, then ask about the columns.
+
+    The same two steps as Format Data, and for the same reason: the
+    columns have to be settled before anything can be stored, and the
+    person who has the file is the one who knows.
+    """
+    files = _uploaded('curve_files')
+    curve_type = request.form.get('curve_type')
+    submitter = (request.form.get('submitter') or '').strip()
+    organization = (request.form.get('organization') or '').strip()
+    doi = (request.form.get('doi') or '').strip()
+
+    limit = current_app.config['MAX_SUBMISSIONS']
+    room = limit - submission_count()
+    if room <= 0:
+        flash(f"There are already {limit} submitted curves, which is as many "
+              "as this site will hold. Please get in touch instead.", "error")
+        return redirect(url_for('main.submit_form'))
+    if not files:
+        flash("Please choose at least one file to submit.", "error")
+        return redirect(url_for('main.submit_form'))
+    if curve_type not in CURVE_TYPES:
+        flash("Please say whether these are cathode, anode or battery curves.",
+              "error")
+        return redirect(url_for('main.submit_form'))
+    if not submitter or not organization:
+        flash("Please give your name and your organization, so the curve can "
+              "be credited and asked about.", "error")
+        return redirect(url_for('main.submit_form'))
+
+    max_files = current_app.config['MAX_SUBMIT_FILES']
+    if len(files) > max_files:
+        flash(f"Please submit at most {max_files} files at a time.", "error")
+        return redirect(url_for('main.submit_form'))
+    if len(files) > room:
+        flash(f"There is room for {room} more curve(s) on this site.", "error")
+        return redirect(url_for('main.submit_form'))
+
+    # Its own directory: submitting a curve must not delete a result or a
+    # formatted batch the user still has open in another tab.
+    workdir = pipeline.create_session_workdir(session.get('submit_workdir'))
+    session['submit_workdir'] = workdir
+
+    try:
+        previews, rejected = pipeline.save_format_uploads(
+            files, curve_type, workdir)
+    except Exception as e:
+        flash(f"Those files could not be read: {e}", "error")
+        return redirect(url_for('main.submit_form'))
+
+    if not previews:
+        flash("None of those files could be read: "
+              + "; ".join(f"{name} ({why})" for name, why in rejected.items()),
+              "error")
+        return redirect(url_for('main.submit_form'))
+
+    # Only the stored basenames go in the cookie; the workdir is already
+    # there, and full paths would bloat it for a large batch.
+    session['submission'] = {
+        'curve_type': curve_type,
+        'stored': [os.path.basename(p['path']) for p in previews],
+        'rejected': rejected,
+        'submitter': submitter,
+        'organization': organization,
+        'doi': doi,
+    }
+    return render_template('submit_confirm.html', previews=previews,
+                           curve_type=curve_type, rejected=rejected,
+                           submitter=submitter, organization=organization,
+                           doi=doi)
+
+
+@bp.route('/submit/confirm', methods=['POST'])
+def submit_confirm():
+    """Store what was confirmed, and say what happened to each file."""
+    state = session.get('submission')
+    workdir = _session_workdir('submit_workdir')
+
+    if not state or not workdir:
+        flash("Your session expired, please choose the files again.", "error")
+        return redirect(url_for('main.submit_form'))
+
+    curve_type = state['curve_type']
+    paths = [_safe_join(workdir, curve_type, name) for name in state['stored']]
+    paths = [p for p in paths if p and os.path.isfile(p)]
+
+    choices = {}
+    for i, path in enumerate(paths):
+        try:
+            choices[path] = (int(request.form[f'soc_{i}']),
+                             int(request.form[f'ocv_{i}']))
+        except (KeyError, ValueError):
+            continue  # left unconfirmed; the heuristic settles that one
+
+    metadata = {'submitter': state['submitter'],
+                'organization': state['organization'],
+                'doi': state['doi']}
+    stored, failed, warnings = pipeline.store_submissions(
+        paths, curve_type, choices, metadata, rejected=state['rejected'])
+
+    # The files themselves are on disk now; nothing more is wanted from
+    # the working directory or the cookie.
+    session.pop('submission', None)
+
+    if stored:
+        flash(f"Thank you — {len(stored)} curve(s) added: "
+              + ", ".join(stored)
+              + ". They are on the run page now, marked as not verified.",
+              "success")
+    for name, notes in warnings.items():
+        flash(f"{name}: " + " ".join(notes), "error")
+    for name, why in failed.items():
+        flash(f"{name} could not be stored ({why}).", "error")
+    return redirect(url_for('main.submit_form'))
 
 
 # --- Format Data ------------------------------------------------------

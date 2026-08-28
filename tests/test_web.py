@@ -12,11 +12,19 @@ Run:
 import io
 import json
 import os
+import shutil
 import sys
+import tempfile
 import time
 import zipfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+# Submitted curves are kept on disk for good, so the suite gets a folder of
+# its own: run against the real one, these checks would depend on whatever
+# the machine happened to be holding, and would leave curves behind.
+SUBMIT_ROOT = tempfile.mkdtemp(prefix="pybep_test_submitted_")
+os.environ["PYBEP_SUBMISSIONS_DIR"] = SUBMIT_ROOT
 
 from pybep.web import create_app, MAX_ITERATIONS  # noqa: E402
 
@@ -60,7 +68,8 @@ check("the contents list points only at sections that exist",
 # properly, then read the answer. Reference material comes after all that.
 check("the instructions lead with doing, not with file rules",
       section_order == ["quickstart", "optimization", "results",
-                        "files", "formatting", "limits"], section_order)
+                        "files", "formatting", "submitting", "limits"],
+      section_order)
 check("the contents list runs in the same order as the page",
       re.findall(r'<a href="#([\w-]+)"', help_page) == section_order,
       re.findall(r'<a href="#([\w-]+)"', help_page))
@@ -1387,6 +1396,129 @@ check("the button that starts a run says what it does",
       and "Continue" not in inside,
       [l.strip() for l in inside.splitlines() if "primary" in l][:2])
 
+# --- curves people send in --------------------------------------------
+# Stored for good rather than in a session directory, shown to everyone,
+# and marked unverified until somebody moves the file into data/ by hand.
+
+tabs = re.findall(r'<nav class="site-nav">(.*?)</nav>', body, re.S)
+tab_names = re.findall(r'>([^<>]+)</a>', tabs[0]) if tabs else []
+check("the bar carries a fourth tab for sending a curve in",
+      tab_names == ["Run optimization", "Format data", "Submit a curve",
+                    "Instructions"], tab_names)
+
+sender = app.test_client()
+page = sender.get("/submit").get_data(as_text=True)
+check("the submission page asks for the file, the type and who sent it",
+      all(f'name="{field}"' in page for field in
+          ("curve_files", "curve_type", "submitter", "organization", "doi")),
+      re.findall(r'name="(\w+)"', page))
+check("and says plainly that what is sent becomes public",
+      "public" in page.lower() and "not verified" in page.lower(),
+      [l.strip() for l in page.splitlines() if "public" in l.lower()][:2])
+check("and the tab it is on is the one lit",
+      '"is-active">Submit a curve<' in page.replace(" class=", ""),
+      [l.strip() for l in page.splitlines() if "is-active" in l])
+
+# Nothing is stored until the columns are settled: the file is unreadable
+# until somebody says which column is which, and a curve nobody can read
+# is worse than no curve.
+with open(cathode, "rb") as f:
+    curve_bytes = f.read()
+r = sender.post("/submit", content_type="multipart/form-data", data={
+    "curve_files": [(io.BytesIO(curve_bytes), "NMC622-LICeM.txt")],
+    "curve_type": "cathode", "submitter": "A Person",
+    "organization": "LICeM", "doi": "10.1016/j.xcrp.2020.100253"})
+asked = r.get_data(as_text=True)
+check("submitting asks about the columns before storing anything",
+      r.status_code == 200 and 'name="soc_0"' in asked
+      and not os.path.isdir(os.path.join(SUBMIT_ROOT, "cathode")),
+      (r.status_code, os.listdir(SUBMIT_ROOT)))
+
+r = sender.post("/submit/confirm", data={"soc_0": "0", "ocv_0": "1"},
+                follow_redirects=True)
+thanks = r.get_data(as_text=True)
+stored_dir = os.path.join(SUBMIT_ROOT, "cathode")
+check("confirming stores the curve, its metadata and the file as it arrived",
+      sorted(os.listdir(stored_dir))
+      == ["NMC622-LICeM.json", "NMC622-LICeM.txt", "original"]
+      and os.listdir(os.path.join(stored_dir, "original"))
+      == ["NMC622-LICeM.txt"],
+      sorted(os.listdir(stored_dir)))
+kept = json.load(open(os.path.join(stored_dir, "NMC622-LICeM.json")))
+check("the metadata beside it says who sent it and where it came from",
+      (kept["submitter"], kept["organization"], kept["doi"])
+      == ("A Person", "LICeM", "10.1016/j.xcrp.2020.100253")
+      and kept["submitted"], kept)
+# The point of writing it in the project's own layout: promoting a curve
+# is moving this one file, with nothing to convert on the way.
+rows = open(os.path.join(stored_dir, "NMC622-LICeM.txt")).read().splitlines()
+check("and the stored curve is ready to be moved into data/ as it stands",
+      len(rows) == 1001 and len(rows[0].split()) == 2, len(rows))
+check("the page says it landed, and lists it with its DOI",
+      "Thank you" in thanks and "NMC622-LICeM" in thanks
+      and "doi.org/10.1016/j.xcrp.2020.100253" in thanks,
+      [l.strip() for l in thanks.splitlines() if "NMC622" in l][:2])
+
+# It shows up beside the built-in curves, in a panel of its own, and off.
+run_page = sender.get("/").get_data(as_text=True)
+panel = re.search(r'<details class="candidate-panel unverified-panel">(.*?)</details>',
+                  run_page, re.S)
+check("the run form grows a panel for the curves nobody has checked",
+      panel is not None and "Submitted" in panel.group(1)
+      and "not verified" in run_page,
+      "no unverified panel" if not panel else panel.group(1)[:120])
+box = re.search(r'<input type="checkbox" name="submitted_cathodes" value="NMC622-LICeM"([^>]*)>',
+                run_page)
+check("with the curve in it, and not ticked",
+      box is not None and "checked" not in box.group(1),
+      box.group(0) if box else "no checkbox for the submitted curve")
+check("and a preview that comes from the submitted folder, not the library",
+      "/curve/submitted/cathode/NMC622-LICeM" in run_page
+      and sender.get("/curve/submitted/cathode/NMC622-LICeM").status_code == 200,
+      sender.get("/curve/submitted/cathode/NMC622-LICeM").status_code)
+
+# A run may use one, and the answer has to say that it did.
+r = sender.post("/upload", content_type="multipart/form-data",
+                follow_redirects=True, data={
+                    "battery_choice": lib_batteries[0],
+                    "submitted_cathodes": ["NMC622-LICeM"],
+                    "library_anodes": [lib_anodes[0]],
+                    "iterations": "1", "slider_a": "1"})
+ran = r.get_data(as_text=True)
+check("a submitted curve can win a run, and is named as submitted when it does",
+      "Lowest RMSD" in ran and "NMC622-LICeM (submitted)" in ran,
+      [l.strip() for l in ran.splitlines() if "NMC622" in l][:2])
+
+# A name that is not on disk is dropped on the way in, so nothing later
+# has to decide whether to trust it.
+r = sender.post("/upload", content_type="multipart/form-data", data={
+    "battery_choice": lib_batteries[0],
+    "submitted_cathodes": ["../../data/cathode_data/anything"],
+    "library_cathodes": [lib_cathodes[0]],
+    "library_anodes": [lib_anodes[0]], "iterations": "1", "slider_a": "1"})
+with sender.session_transaction() as sess:
+    kept_submitted = (sess.get("submitted") or {}).get("cathode")
+check("a submitted name the folder does not list never gets that far",
+      r.status_code == 302 and kept_submitted == [], kept_submitted)
+
+# The two things that stop a public form filling the disk.
+r = sender.post("/submit", content_type="multipart/form-data", data={
+    "curve_files": [(io.BytesIO(curve_bytes), "anonymous.txt")],
+    "curve_type": "cathode", "submitter": "", "organization": ""})
+check("a curve with nobody behind it is refused",
+      r.status_code == 302, r.status_code)
+
+app.config["MAX_SUBMISSIONS"] = 1
+r = sender.post("/submit", content_type="multipart/form-data", data={
+    "curve_files": [(io.BytesIO(curve_bytes), "one_too_many.txt")],
+    "curve_type": "cathode", "submitter": "A Person", "organization": "LICeM"})
+after = sender.get("/submit").get_data(as_text=True)
+check("and past the cap the form stops taking them",
+      r.status_code == 302 and 'name="curve_files"' not in after,
+      (r.status_code,
+       "form still offered" if 'name="curve_files"' in after else "no redirect"))
+app.config["MAX_SUBMISSIONS"] = 200
+
 # --- rejects bad input ------------------------------------------------
 resp = client.post("/format", data={
     "data_files": [(io.BytesIO(b"not data"), "notes.pdf")],
@@ -1400,6 +1532,7 @@ check("upload with no files redirects with an error", resp.status_code == 302,
       resp.status_code)
 
 # --- summary ----------------------------------------------------------
+shutil.rmtree(SUBMIT_ROOT, ignore_errors=True)
 failed = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(failed)}/{len(results)} checks passed")
 sys.exit(1 if failed else 0)

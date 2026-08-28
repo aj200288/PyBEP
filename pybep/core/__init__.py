@@ -34,6 +34,17 @@ from .data_formatter import (
 )
 from .add_curves import add_half_cell_data, build_curve_entry
 from .add_battery import load_soc_ocv_data
+from .submissions import (
+    submission_root,
+    submission_names,
+    read_metadata,
+    list_submissions,
+    submission_count,
+    save_submission,
+    load_submission,
+    select_submitted_curves,
+    submission_curve_points,
+)
 from .library import (
     library_curves,
     library_names,
@@ -74,6 +85,15 @@ __all__ = [
     "library_curve_points",
     "battery_library_names",
     "load_battery_library_curve",
+    "submission_root",
+    "submission_names",
+    "read_metadata",
+    "list_submissions",
+    "submission_count",
+    "save_submission",
+    "load_submission",
+    "select_submitted_curves",
+    "submission_curve_points",
     "perform_full_optimization_parallel",
     "save_optimization_result_to_json",
     "perform_full_optimization_parallel_to_json",

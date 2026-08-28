@@ -247,3 +247,9 @@ uv.lock
 
 # Scratch screenshots used when reporting UI problems
 debug_images/
+
+# Curves people have sent in through the website. Kept on the machine
+# that is serving, not in the repository: a curve becomes part of the
+# project by being moved into data/ by hand, which is a commit like any
+# other. Override the location with PYBEP_SUBMISSIONS_DIR.
+submitted/
