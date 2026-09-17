@@ -253,3 +253,6 @@ debug_images/
 # project by being moved into data/ by hand, which is a commit like any
 # other. Override the location with PYBEP_SUBMISSIONS_DIR.
 submitted/
+
+# Anže's own working notes, kept beside the project but not part of it.
+pyBEP spletna stran zapiski.txt
