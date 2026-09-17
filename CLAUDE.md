@@ -40,8 +40,9 @@ The remote names are backwards from the usual:
 - `fork` → `github.com/aj200288/PyBEP` — ours. **Push here.**
 - `origin` → `github.com/JonPisek/PyBEP` — Jon's upstream. **Never push.**
 
-Work happens on `unified-structure`, branched from `main`. Commit after every
-prompt without being asked.
+Work happens on `main` directly. (`unified-structure` was the working branch
+until it was fast-forwarded into `main` and deleted — there is no other
+branch to track.) Commit after every prompt without being asked.
 
 ## Things that bite
 
