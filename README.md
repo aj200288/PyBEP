@@ -241,36 +241,74 @@ directly (parsed once per process and cached). Uploads are never written into
 optimization has read them, so using the site cannot change what the next
 visitor sees.
 
-Run it locally with `python -m pybep.web`. For a real deployment, serve the same
-app factory with a production server rather than Flask's development one:
+## Deploying the website
+
+`python -m pybep.web` is Flask's own development server — fine for trying the
+site out on your own machine, not for real visitors. Putting it on a domain
+takes a few concrete steps, none of which touch the code.
+
+### 1. Serve it with a production WSGI server
+
+Both point at the same app factory, so nothing else changes:
 
 ```sh
-waitress-serve --port=8000 --call pybep.web:create_app   # Windows
-gunicorn 'pybep.web:create_app()' -b 0.0.0.0:8000        # Linux hosts
+waitress-serve --port=8000 --call pybep.web:create_app   # Windows host
+gunicorn 'pybep.web:create_app()' -b 0.0.0.0:8000        # Linux host
 ```
 
-**Set `SECRET_KEY` in the environment.** It signs the session cookie, and that
-cookie names the temporary directory the server reads a session's files from
-and later deletes. If it is unset, a random key is generated per process and a
-warning is printed — safe, but sessions are lost on restart and break entirely
-across multiple workers, so set it for anything real. There is deliberately no
-fixed fallback: a key committed to a public repository is a key everyone has.
+Put a reverse proxy (nginx, Caddy, or whatever the host already provides) in
+front of that port for HTTPS and to connect it to the domain.
 
-A few limits in `web/__init__.py` exist because the optimization is expensive and
-the site is public — work grows as *cathodes × anodes × iterations*, so
-iterations are capped at 5, candidates at 12 per electrode (library plus
-uploads), and uploads at 32 MB. For scale: the full built-in library is 7 × 2 =
-14 combinations, which takes roughly 7 s at 1 iteration and 34 s at 5 with
-`PYBEP_N_JOBS=2`. Raise the caps only alongside a real job queue or request
-timeout.
-`PYBEP_N_JOBS` controls how many worker processes the optimization uses
-(default 2; small hosts report more CPUs than they actually give you).
+### 2. Set `SECRET_KEY`
 
-The upload → results flow keeps its state in a per-session temp directory,
-which assumes a single running instance. Running several instances behind a
-load balancer would need shared storage instead. Directories nothing has
-touched for six hours are swept up when the next one is created, so visitors
-who upload once and leave do not accumulate on disk.
+It signs the session cookie, and that cookie names the temporary directory the
+server reads a session's files from and later deletes. Left unset, a random
+key is generated per process and a warning is printed — safe, but sessions
+are lost on every restart and break entirely across multiple worker
+processes, so set a fixed one for anything real. There is deliberately no
+fixed fallback in the code: a key committed to a public repository is a key
+everyone has.
+
+Generate one once:
+
+```sh
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Set the result as the `SECRET_KEY` environment variable on the server (not in
+the repository), and keep it the same across future deploys — regenerating it
+every time logs everyone out, the same problem as not setting it at all.
+
+### 3. Point submissions at storage that actually persists
+
+Curves visitors submit through the site are written to `submitted/` and are
+meant to stay there permanently until someone reviews and promotes one into
+`data/`. If the hosting environment wipes its filesystem on restart or
+redeploy (common on some managed platforms unless a persistent volume/disk is
+attached), set `PYBEP_SUBMISSIONS_DIR` to a path on storage that survives
+that — otherwise submissions quietly vanish.
+
+### 4. Know the limits
+
+The optimization is expensive, the site is public, and there is no job queue
+— so a few caps in `pybep/web/__init__.py` keep one visitor from occupying the
+whole server: iterations capped at 5, candidates at 12 per electrode (library
+plus uploads), uploads at 32 MB, stored submissions at 200. For scale: the
+full built-in library is 7 × 2 = 14 combinations, which takes roughly 7 s at 1
+iteration and 34 s at 5 with `PYBEP_N_JOBS=2`. Raise any of these only
+alongside a real job queue or request timeout, not just because the numbers
+look small. `PYBEP_N_JOBS` controls how many worker processes one
+optimization uses (default 2; small hosts often report more CPUs than they
+actually grant a container).
+
+### 5. One instance at a time
+
+The upload → results flow keeps its state in a per-session temp directory on
+local disk, not a database — this assumes a single running instance. Running
+several instances behind a load balancer would need shared storage instead;
+it isn't set up for that today. Directories nothing has touched for six hours
+are swept up when the next one is created, so visitors who upload once and
+leave do not accumulate on disk.
 
 ## Using `perform_full_optimization_parallel_to_json()` function
 
